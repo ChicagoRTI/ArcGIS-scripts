@@ -30,5 +30,5 @@ runfile('D:/CRTI/python_projects/FenceSittersMerge/process_shape_file.py', wdir=
 To run under ArcGIS python:
 ````
 cd D:\CRTI\python_projects\FenceSittersMerge\
-C:\Python27_ArcGIS\ArcGIS10.4\python -m process_shape_file "D:/CRTI/GIS data/DP_sample_area_w_clumps/original/DP_sample_area_w_clumps.shp" "D:/CRTI/GIS data/DP_sample_area_w_clumps/work/DP_sample_area_w_clumps.shp"
+C:\Python27_ArcGIS\ArcGIS10.6\python -m process_shape_file "D:/CRTI/GIS data/DP_sample_area_w_clumps/original/DP_sample_area_w_clumps.shp" "D:/CRTI/GIS data/DP_sample_area_w_clumps/work/DP_sample_area_w_clumps.shp"
 ````

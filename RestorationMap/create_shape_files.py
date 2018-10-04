@@ -8,14 +8,14 @@ Created on Tue Mar 20 11:07:22 2018
 #   runfile('D:/CRTI/python_projects/ArcGIS-scripts/RestorationMap/create_shape_files.py', wdir='D:/CRTI/python_projects/ArcGIS-scripts/RestorationMap', args="'D:/CRTI/MySql/Data/files' 'D:/CRTI/GIS data/restoration_map'")
 #
 
-# Make sure the ArcGIS components are in the system path (from C:\Program Files (x86)\ArcGIS\Desktop10.4\Support\Python/Desktop10.4.pth)
+# Make sure the ArcGIS components are in the system path (from C:\Program Files (x86)\ArcGIS\Desktop10.6\Support\Python/Desktop10.6.pth)
 import sys
 import pandas as pd
 
 
 
 
-__arc_gis_dir = "C:\\Program Files (x86)\\ArcGIS\\Desktop10.4\\"
+__arc_gis_dir = "C:\\Program Files (x86)\\ArcGIS\\Desktop10.6\\"
 __arc_gis_path = [__arc_gis_dir + "bin",
                 __arc_gis_dir + "ArcPy",
                 __arc_gis_dir + "ArcToolBox\Scripts"]

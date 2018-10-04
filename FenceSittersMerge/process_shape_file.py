@@ -9,12 +9,12 @@ Created on Tue Mar 20 11:07:22 2018
 #
 # To run under ArcGIS python:
 #   cd D:\CRTI\python_projects\ArcGIS-scripts\FenceSittersMerge\
-#   C:\Python27_ArcGIS\ArcGIS10.4\python -m process_shape_file "D:/CRTI/GIS data/DP_sample_area_w_clumps/original/DP_sample_area_w_clumps.shp" "D:/CRTI/GIS data/DP_sample_area_w_clumps/work/DP_sample_area_w_clumps.shp"
+#   C:\Python27_ArcGIS\ArcGIS10.6\python -m process_shape_file "D:/CRTI/GIS data/DP_sample_area_w_clumps/original/DP_sample_area_w_clumps.shp" "D:/CRTI/GIS data/DP_sample_area_w_clumps/work/DP_sample_area_w_clumps.shp"
 
-# Make sure the ArcGIS components are in the system path (from C:\Program Files (x86)\ArcGIS\Desktop10.4\Support\Python/Desktop10.4.pth)
+# Make sure the ArcGIS components are in the system path (from C:\Program Files (x86)\ArcGIS\Desktop10.6\Support\Python/Desktop10.6.pth)
 import sys
 import math
-__arc_gis_dir = "C:\\Program Files (x86)\\ArcGIS\\Desktop10.4\\"
+__arc_gis_dir = "C:\\Program Files (x86)\\ArcGIS\\Desktop10.6\\"
 __arc_gis_path = [__arc_gis_dir + "bin",
                 __arc_gis_dir + "ArcPy",
                 __arc_gis_dir + "ArcToolBox\Scripts"]
