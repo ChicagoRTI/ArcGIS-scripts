@@ -5,10 +5,10 @@ Created on Tue Mar 20 11:07:22 2018
 @author: Don
 """
 # To run from Spyder iPython console:
-#   runfile('D:/CRTI/python_projects/FenceSittersMerge/process_shape_file.py', wdir='D:/CRTI/python_projects/FenceSittersMerge', args="'D:/CRTI/GIS data/DP_sample_area_w_clumps/original/DP_sample_area_w_clumps.shp' 'D:/CRTI/GIS data/DP_sample_area_w_clumps/work/DP_sample_area_w_clumps.shp'")
+#   runfile('D:/CRTI/python_projects/ArcGIS-scripts/FenceSittersMerge/process_shape_file.py', wdir='D:/CRTI/python_projects/ArcGIS-scripts/FenceSittersMerge', args="'D:/CRTI/GIS data/DP_sample_area_w_clumps/original/DP_sample_area_w_clumps.shp' 'D:/CRTI/GIS data/DP_sample_area_w_clumps/work/DP_sample_area_w_clumps.shp'")
 #
 # To run under ArcGIS python:
-#   cd D:\CRTI\python_projects\FenceSittersMerge\
+#   cd D:\CRTI\python_projects\ArcGIS-scripts\FenceSittersMerge\
 #   C:\Python27_ArcGIS\ArcGIS10.4\python -m process_shape_file "D:/CRTI/GIS data/DP_sample_area_w_clumps/original/DP_sample_area_w_clumps.shp" "D:/CRTI/GIS data/DP_sample_area_w_clumps/work/DP_sample_area_w_clumps.shp"
 
 # Make sure the ArcGIS components are in the system path (from C:\Program Files (x86)\ArcGIS\Desktop10.4\Support\Python/Desktop10.4.pth)

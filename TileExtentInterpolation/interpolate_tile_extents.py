@@ -15,7 +15,7 @@ Created on Tue Sep 18 16:10:17 2018
 
 
 # To run from Spyder iPython console:
-#   runfile('D:/CRTI/python_projects/TileExtentInterpolation/interpolate_tile_extents.py', wdir='D:/CRTI/python_projects/TileExtentInterpolation', args="'D:/CRTI/GIS data/will_county_tree_crowns_sample/renamed'")
+#   runfile('D:/CRTI/python_projects/ArcGIS-scripts/TileExtentInterpolation/interpolate_tile_extents.py', wdir='D:/CRTI/python_projects/ArcGIS-scripts/TileExtentInterpolation', args="'D:/CRTI/GIS data/will_county_tree_crowns_sample/renamed'")
 #
 # To run under ArcGIS python, enter these commands from the DOS window
 #   cd D:\CRTI\python_projects\compute_tile_extents\
