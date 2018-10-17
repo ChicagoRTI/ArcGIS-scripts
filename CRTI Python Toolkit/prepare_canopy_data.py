@@ -2,7 +2,7 @@
 # ---------------------------------------------------------------------------
 
 # To run from Spyder iPython console:
-# runfile('D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit/prepare_canopy_data.py', wdir='D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit', args="'D:\\CRTI\\GIS data\\DP_sample_tile_block' 'D:/Temp/prepared_canopy_data'")
+# runfile('D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit/prepare_canopy_data.py', wdir='D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit', args="'D:\\CRTI\\GIS data\\DP_sample_tile_block' 'D:/Temp/prepared_canopy_data.shp'")
 
 # To run under ArcGIS python, enter these commands from the DOS window
 #   cd D:\CRTI\python_projects\ArcGIS-scripts\CRTI Python Toolkit\
@@ -21,6 +21,7 @@ import populate_folder_field
 import merge_folder
 import interpolate_tile_extents
 import merge_fence_sitters
+import fix_file_names
 
 
 TILE_COLUMN_NAME = 'TileId'
@@ -34,8 +35,12 @@ def prepare_canopy_data (input_tile_folder, output_fc):
     arcpy.env.scratchWorkspace = os.getenv('USERPROFILE') + '\\Documents\\ArcGIS'
     
     step_count = 0
-    step_total = 10
+    step_total = 11
 
+    step_count += 1       
+    common_functions.step_header (step_count, step_total, 'Fixing up tile file names', [input_tile_folder], [input_tile_folder])
+    fix_file_names.fixup(input_tile_folder)
+    
     step_count += 1       
     common_functions.step_header (step_count, step_total, 'Populating TileId in all tiles', [input_tile_folder], [input_tile_folder])
     populate_folder_field.populate(input_tile_folder, TILE_COLUMN_NAME, 'FC_NAME') 

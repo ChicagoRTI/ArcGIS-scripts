@@ -53,7 +53,7 @@ def get_tile_extents_mp (name_list, log_file):
         tiles = dict()
         for file_name in name_list:
 #            if count % ((len(name_list)/10)+1) == 0:
-            if count % ((len(name_list)/1)+1) == 0:
+            if count % ((len(name_list)/25)+1) == 0:
                 common_functions.log_mp(log_file, "Reading shape file " + str(count) + ' of ' + str(len(name_list)))
             # Get the extent information
             extent = arcpy.Describe(file_name).extent
@@ -84,8 +84,6 @@ def main_process_fc_files (fc_input_path, fc_output_file, tile_dim):
     fc_output_path, fc_output_name = os.path.split(fc_output_file)
     log_fn = arcpy.env.scratchFolder + '/log_mp.txt'
     
-    log('Input: ' + fc_input_path)
-    log('Output: ' + fc_output_file)
     
     # Create the output directory if it doesn't already exist
     if not os.path.exists(fc_output_path):
