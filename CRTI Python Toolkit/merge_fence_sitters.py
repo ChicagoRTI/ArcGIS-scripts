@@ -192,7 +192,7 @@ def merge (fc_input, fc_output):
     i=0
     for clump, tile_pairs in clumped_tile_pairs.iteritems():
         i += 1
-        if i % ((len(clumped_tile_pairs)/25)+1) == 0:
+        if i % ((len(clumped_tile_pairs)/100)+1) == 0:
             log ("Processing clump " + str(clump) + " (" + str(i) + " of " + str(len(clumped_tile_pairs)) + ")")
         for tile_pair in tile_pairs:
             process_clumped_tile_pair(clump, tile_pair, sr)

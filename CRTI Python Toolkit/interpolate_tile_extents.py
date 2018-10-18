@@ -17,7 +17,7 @@ Created on Tue Sep 18 16:10:17 2018
 
 
 # To run from Spyder iPython console:
-#   runfile('D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit/interpolate_tile_extents.py', wdir='D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit', args="'D:/CRTI/GIS data/will_county_tree_crowns_sample/renamed' '2500.0' 'C:\\Users\\Don\\Documents\\ArcGIS\\scratch.gdb\\fishnet'")
+#   runfile('D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit/interpolate_tile_extents.py', wdir='D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit', args="'C:/Users/Don/Documents/ArcGIS/scratch.gdb/tile_file_names' '2500.0' 'C:\\Users\\Don\\Documents\\ArcGIS\\scratch.gdb\\fishnet'")
 #
 # To run under ArcGIS python, enter these commands from the DOS window
 #   cd D:\CRTI\python_projects\ArcGIS-scripts\CRTI Python Toolkit\
@@ -33,6 +33,7 @@ from functools import partial
 import common_functions
 common_functions.add_arcgis_to_sys_path()
 import arcpy
+import tile_file_names
 
 _lock_mp = multiprocessing.Lock()
 _threads = multiprocessing.cpu_count()
@@ -53,7 +54,7 @@ def get_tile_extents_mp (name_list, log_file):
         tiles = dict()
         for file_name in name_list:
 #            if count % ((len(name_list)/10)+1) == 0:
-            if count % ((len(name_list)/25)+1) == 0:
+            if count % ((len(name_list)/100)+1) == 0:
                 common_functions.log_mp(log_file, "Reading shape file " + str(count) + ' of ' + str(len(name_list)))
             # Get the extent information
             extent = arcpy.Describe(file_name).extent
@@ -80,7 +81,7 @@ def adjust_boundary (reference, boundary, direction, step):
         return x 
 
 
-def main_process_fc_files (fc_input_path, tile_dim, fc_output_file):
+def main_process_fc_files (tile_file_names_table, tile_dim, fc_output_file):
     fc_output_path, fc_output_name = os.path.split(fc_output_file)
     log_fn = arcpy.env.scratchFolder + '/log_mp.txt'        
     tile_dim = float(tile_dim)
@@ -93,14 +94,8 @@ def main_process_fc_files (fc_input_path, tile_dim, fc_output_file):
     if arcpy.Exists(fc_output_file):
         arcpy.Delete_management(fc_output_file)
     
-    # Get a list of the feature classes in the input directory
-    envdir = fc_input_path
-    desc = arcpy.Describe(envdir)
-    if hasattr(desc, "datasetType") and desc.datasetType=='FeatureDataset':
-        envdir = os.path.dirname(envdir)
-    arcpy.env.workspace = envdir
-    name_list = [fc_input_path + '/' + fc_name for fc_name in arcpy.ListFeatureClasses()]
-    
+    # Get a list of the input feature classes
+    name_list = tile_file_names.read_file_names(tile_file_names_table)    
     
     # TEMP _ DON'T FORGET TO REMOVE THIS!!!
 #    name_list = name_list * 10

@@ -18,8 +18,8 @@ common_functions.add_arcgis_to_sys_path()
 import arcpy
 import arcpy.sa
 import populate_field
-import populate_folder_field
-import merge_folder
+#import populate_folder_field
+#import merge_folder
 import interpolate_tile_extents
 import merge_fence_sitters
 import fix_file_names
@@ -29,86 +29,103 @@ import join_files
 TILE_COLUMN_NAME = 'TileId'
 POLYGON_ID_COLUMN_NAME = 'PolygonId'
 CLUMP_ID_COLUMN_NAME = 'ClumpId'
-#tile_dimension = 2500.0
 
-def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster, output_fc):
+def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster, start_step, output_fc):
 
     arcpy.env.overwriteOutput = True
     arcpy.env.scratchWorkspace = os.getenv('USERPROFILE') + '\\Documents\\ArcGIS'
 
-    step_count = 0
+    step_start = int(start_step)
+    step_count = 1
     step_total = 14
-    
-    step_count += 1       
+
     tile_file_name_table = arcpy.env.scratchGDB + '\\tile_file_names'
-    common_functions.step_header (step_count, step_total, 'Collecting tile file names', [input_tile_folder], [input_tile_folder])
-    tile_file_names.create_table(input_tile_folder, tile_file_name_table)
-
-    step_count += 1       
-    common_functions.step_header (step_count, step_total, 'Fixing up tile file names', [input_tile_folder], [input_tile_folder])
-    fix_file_names.fixup(input_tile_folder)
-    
-    step_count += 1       
-    common_functions.step_header (step_count, step_total, 'Populating TileId in all tiles', [input_tile_folder], [input_tile_folder])
-    populate_folder_field.populate(input_tile_folder, TILE_COLUMN_NAME, 'FC_NAME') 
-    
-    step_count += 1       
     merged_tiles_unclumped = arcpy.env.scratchGDB + '\\merged_tiles_unclumped'
-    common_functions.step_header (step_count, step_total, 'Merging tiles into a single feature class', [input_tile_folder], [merged_tiles_unclumped])
-    merge_folder.merge(input_tile_folder, merged_tiles_unclumped)        
-    
-    step_count += 1       
-    common_functions.step_header (step_count, step_total, 'Adding and populating PolygonId field', [merged_tiles_unclumped], [merged_tiles_unclumped])
-    populate_field.populate(merged_tiles_unclumped, POLYGON_ID_COLUMN_NAME, "UNIQUE_ID")
-    
-    step_count += 1       
     create_fence_lines_output_fc = arcpy.env.scratchGDB + '\\fence_lines'
-    common_functions.step_header (step_count, step_total, 'Creating fence lines', [input_tile_folder], [create_fence_lines_output_fc])
-    interpolate_tile_extents.main_process_fc_files(input_tile_folder, tile_dimension, create_fence_lines_output_fc)
-
-    step_count += 1       
     merged_tiles_as_layer = arcpy.env.scratchGDB + '\\merged_tiles_as_layer'
     fence_sitter_clumps_undissolved = arcpy.env.scratchGDB + '\\fence_sitter_clumps_undissolved'
-    common_functions.step_header (step_count, step_total, 'Creating fence sitters feature class (all polygons that intersect a fence line)', [merged_tiles_unclumped, create_fence_lines_output_fc], [fence_sitter_clumps_undissolved])
-    arcpy.MakeFeatureLayer_management(merged_tiles_unclumped, merged_tiles_as_layer, "", "", "")
-    arcpy.SelectLayerByLocation_management(merged_tiles_as_layer, "INTERSECT", create_fence_lines_output_fc, "", "NEW_SELECTION", "NOT_INVERT")
-    arcpy.CopyFeatures_management(merged_tiles_as_layer, fence_sitter_clumps_undissolved, "", "0", "0", "0")
-
-    step_count += 1       
     fence_sitter_clumps_dissolved = arcpy.env.scratchGDB + '\\fence_sitter_clumps_dissolved'
-    common_functions.step_header (step_count, step_total, 'Dissolve fence sitters into clumps', [fence_sitter_clumps_undissolved], [fence_sitter_clumps_dissolved])
-    arcpy.Dissolve_management(fence_sitter_clumps_undissolved, fence_sitter_clumps_dissolved, "", "", "SINGLE_PART", "DISSOLVE_LINES")
-
-    step_count += 1       
-    common_functions.step_header (step_count, step_total, 'Adding and populating ClumpId', [fence_sitter_clumps_dissolved], [fence_sitter_clumps_dissolved])
-    populate_field.populate(fence_sitter_clumps_dissolved, CLUMP_ID_COLUMN_NAME, "UNIQUE_ID")
-
-    step_count += 1       
     merged_tiles_clumped = arcpy.env.scratchGDB + '\\merged_tiles_clumped'
-    common_functions.step_header (step_count, step_total, 'Append ClumpId to merged tiles', [merged_tiles_unclumped, fence_sitter_clumps_dissolved], [merged_tiles_clumped])
-    arcpy.SpatialJoin_analysis(merged_tiles_unclumped, fence_sitter_clumps_dissolved, merged_tiles_clumped, "JOIN_ONE_TO_ONE", "KEEP_ALL")
-
-    step_count += 1
     canopies_without_ndvi = arcpy.env.scratchGDB + '\\canopies_without_ndvi'       
-    common_functions.step_header (step_count, step_total, 'Stitching adjacent fence sitters together', [merged_tiles_clumped], [canopies_without_ndvi])
-    merge_fence_sitters.merge(merged_tiles_clumped, canopies_without_ndvi)
-
-    step_count += 1       
     zonal_ndvi = arcpy.env.scratchGDB + '\\zonal_ndvi'
-    common_functions.step_header (step_count, step_total, 'Computing NDVI zonal statistics', [canopies_without_ndvi, ndvi_raster], [zonal_ndvi])
-    arcpy.sa.ZonalStatisticsAsTable(canopies_without_ndvi, POLYGON_ID_COLUMN_NAME, ndvi_raster, zonal_ndvi)
 
-    step_count += 1       
-    common_functions.step_header (step_count, step_total, 'Appending NDVI statistics', [canopies_without_ndvi, zonal_ndvi], [output_fc])
-    join_files.join(canopies_without_ndvi, zonal_ndvi, POLYGON_ID_COLUMN_NAME, POLYGON_ID_COLUMN_NAME, '', output_fc)
     
+    if step_count >= step_start:
+        common_functions.step_header (step_count, step_total, 'Collecting tile file names', [input_tile_folder], [input_tile_folder])
+        tile_file_names.create_table(input_tile_folder, tile_file_name_table)
     step_count += 1       
-    common_functions.step_header (step_count, step_total, 'Cleaning up', [], [])
-    arcpy.DeleteField_management(output_fc, ['Join_Count', 'Shape_Length_1', 'Shape_Area_1', 'PolygonId_1', 'COUNT', 'AREA_1'])
+
+    if step_count >= step_start:
+        common_functions.step_header (step_count, step_total, 'Fixing up tile file names', [tile_file_name_table], [tile_file_name_table])
+        fix_file_names.fixup(tile_file_name_table)
+    step_count += 1       
+    
+    if step_count >= step_start:
+        common_functions.step_header (step_count, step_total, 'Populating TileId in all tiles', [input_tile_folder], [input_tile_folder])
+        populate_field.populate(tile_file_names.read_file_names(tile_file_name_table), TILE_COLUMN_NAME, 'FC_NAME') 
+    step_count += 1       
+    
+    if step_count >= step_start:
+        common_functions.step_header (step_count, step_total, 'Merging tiles into a single feature class', [tile_file_name_table], [merged_tiles_unclumped])
+#        merge_folder.merge(input_tile_folder, merged_tiles_unclumped) 
+        arcpy.Merge_management(tile_file_names.read_file_names(tile_file_name_table), merged_tiles_unclumped)
+    step_count += 1       
+    
+    if step_count >= step_start:
+        common_functions.step_header (step_count, step_total, 'Adding and populating PolygonId field', [merged_tiles_unclumped], [merged_tiles_unclumped])
+        populate_field.populate([merged_tiles_unclumped], POLYGON_ID_COLUMN_NAME, "UNIQUE_ID")
+    step_count += 1       
+    
+    if step_count >= step_start:
+        common_functions.step_header (step_count, step_total, 'Creating fence lines', [tile_file_name_table], [create_fence_lines_output_fc])
+        interpolate_tile_extents.main_process_fc_files(tile_file_name_table, tile_dimension, create_fence_lines_output_fc)
+    step_count += 1       
+
+    if step_count >= step_start:
+        common_functions.step_header (step_count, step_total, 'Creating fence sitters feature class (all polygons that intersect a fence line)', [merged_tiles_unclumped, create_fence_lines_output_fc], [fence_sitter_clumps_undissolved])
+        arcpy.MakeFeatureLayer_management(merged_tiles_unclumped, merged_tiles_as_layer, "", "", "")
+        arcpy.SelectLayerByLocation_management(merged_tiles_as_layer, "INTERSECT", create_fence_lines_output_fc, "", "NEW_SELECTION", "NOT_INVERT")
+        arcpy.CopyFeatures_management(merged_tiles_as_layer, fence_sitter_clumps_undissolved, "", "0", "0", "0")
+    step_count += 1       
+
+    if step_count >= step_start:
+        common_functions.step_header (step_count, step_total, 'Dissolve fence sitters into clumps', [fence_sitter_clumps_undissolved], [fence_sitter_clumps_dissolved])
+        arcpy.Dissolve_management(fence_sitter_clumps_undissolved, fence_sitter_clumps_dissolved, "", "", "SINGLE_PART", "DISSOLVE_LINES")
+    step_count += 1       
+
+    if step_count >= step_start:
+        common_functions.step_header (step_count, step_total, 'Adding and populating ClumpId', [fence_sitter_clumps_dissolved], [fence_sitter_clumps_dissolved])
+        populate_field.populate([fence_sitter_clumps_dissolved], CLUMP_ID_COLUMN_NAME, "UNIQUE_ID")
+    step_count += 1       
+
+    if step_count >= step_start:
+        common_functions.step_header (step_count, step_total, 'Append ClumpId to merged tiles', [merged_tiles_unclumped, fence_sitter_clumps_dissolved], [merged_tiles_clumped])
+        arcpy.SpatialJoin_analysis(merged_tiles_unclumped, fence_sitter_clumps_dissolved, merged_tiles_clumped, "JOIN_ONE_TO_ONE", "KEEP_ALL")
+    step_count += 1       
+
+    if step_count >= step_start:
+        common_functions.step_header (step_count, step_total, 'Stitching adjacent fence sitters together', [merged_tiles_clumped], [canopies_without_ndvi])
+        merge_fence_sitters.merge(merged_tiles_clumped, canopies_without_ndvi)
+    step_count += 1       
+
+    if step_count >= step_start:
+        common_functions.step_header (step_count, step_total, 'Computing NDVI zonal statistics', [canopies_without_ndvi, ndvi_raster], [zonal_ndvi])
+        arcpy.sa.ZonalStatisticsAsTable(canopies_without_ndvi, POLYGON_ID_COLUMN_NAME, ndvi_raster, zonal_ndvi)
+    step_count += 1       
+
+    if step_count >= step_start:
+        common_functions.step_header (step_count, step_total, 'Appending NDVI statistics', [canopies_without_ndvi, zonal_ndvi], [output_fc])
+        join_files.join(canopies_without_ndvi, zonal_ndvi, POLYGON_ID_COLUMN_NAME, POLYGON_ID_COLUMN_NAME, '', output_fc)
+    step_count += 1       
+    
+    if step_count >= step_start:
+        common_functions.step_header (step_count, step_total, 'Cleaning up', [], [])
+        arcpy.DeleteField_management(output_fc, ['Join_Count', 'Shape_Length_1', 'Shape_Area_1', 'PolygonId_1', 'COUNT', 'AREA_1'])
+    step_count += 1       
 
 
 if __name__ == '__main__':
-     prepare_canopy_data(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
+     prepare_canopy_data(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
 
 
 #rcpy.MakeFeatureLayer_management(Merged_tiles, Merged_tiles__as_layer_, "", "", "")

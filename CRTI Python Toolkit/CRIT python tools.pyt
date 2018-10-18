@@ -49,6 +49,14 @@ class prepare_canopy_data(object):
             parameterType="Required",
             direction="Input")
         ndvi_raster.value =r'D:\CRTI\GIS data\Earth Engine\DupageNDVI\DuPage_SampleArea_least_recent.tif'
+        
+        start_step = arcpy.Parameter(
+            displayName="Start step",
+            name="start_step",
+            datatype="Long",
+            parameterType="Required",
+            direction="Input")
+        start_step.value = 1
 
         output_fc = arcpy.Parameter(
             displayName="Output feature class",
@@ -58,7 +66,7 @@ class prepare_canopy_data(object):
             direction="Output")
         output_fc.value = arcpy.env.scratchGDB + '/prepared_canopy_data'
         
-        params = [tile_folder, tile_dimension, ndvi_raster, output_fc]
+        params = [tile_folder, tile_dimension, ndvi_raster, start_step, output_fc]
         return params
 
     def isLicensed(self):
@@ -78,6 +86,6 @@ class prepare_canopy_data(object):
 
     def execute(self, parameters, messages):
         import prepare_canopy_data
-        prepare_canopy_data.prepare_canopy_data(parameters[0].valueAsText, parameters[1].valueAsText, parameters[2].valueAsText, parameters[3].valueAsText)        
+        prepare_canopy_data.prepare_canopy_data(parameters[0].valueAsText, parameters[1].valueAsText, parameters[2].valueAsText, parameters[3].valueAsText, parameters[4].valueAsText)        
         return
 
