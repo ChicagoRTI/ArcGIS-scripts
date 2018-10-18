@@ -17,7 +17,7 @@ Created on Tue Sep 18 16:10:17 2018
 
 
 # To run from Spyder iPython console:
-#   runfile('D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit/interpolate_tile_extents.py', wdir='D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit', args="'D:/CRTI/GIS data/will_county_tree_crowns_sample/renamed' 'C:\\Users\\Don\\Documents\\ArcGIS\\scratch.gdb\\fishnet' '2500.0'")
+#   runfile('D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit/interpolate_tile_extents.py', wdir='D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit', args="'D:/CRTI/GIS data/will_county_tree_crowns_sample/renamed' '2500.0' 'C:\\Users\\Don\\Documents\\ArcGIS\\scratch.gdb\\fishnet'")
 #
 # To run under ArcGIS python, enter these commands from the DOS window
 #   cd D:\CRTI\python_projects\ArcGIS-scripts\CRTI Python Toolkit\
@@ -80,10 +80,10 @@ def adjust_boundary (reference, boundary, direction, step):
         return x 
 
 
-def main_process_fc_files (fc_input_path, fc_output_file, tile_dim):
+def main_process_fc_files (fc_input_path, tile_dim, fc_output_file):
     fc_output_path, fc_output_name = os.path.split(fc_output_file)
-    log_fn = arcpy.env.scratchFolder + '/log_mp.txt'
-    
+    log_fn = arcpy.env.scratchFolder + '/log_mp.txt'        
+    tile_dim = float(tile_dim)
     
     # Create the output directory if it doesn't already exist
     if not os.path.exists(fc_output_path):
@@ -183,7 +183,7 @@ def main_process_fc_files (fc_input_path, fc_output_file, tile_dim):
  
 
 if __name__ == '__main__':
-    main_process_fc_files(sys.argv[1], sys.argv[2], float(sys.argv[3]))
+    main_process_fc_files(sys.argv[1], sys.argv[2], sys.argv[3])
     
     
 

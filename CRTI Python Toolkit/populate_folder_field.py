@@ -20,7 +20,7 @@ def populate_mp (fcs, field_name, field_value, log_file):
         # Add a new attribute to all of the shape files, then populate it with the shape file name
         fc_count = 0
         for fc in fcs:
-            if fc_count % ((len(fcs)/10)+1) == 0:
+            if fc_count % ((len(fcs)/25)+1) == 0:
                 common_functions.log_mp(log_file, 'Populating ' + field_name + ' with ' + field_value + ' in ' + fc + ' (' + str(fc_count) + ' of ' + str(len(fcs)) + ')')
             # Add the field if it does not already exist
             if len(arcpy.ListFields(fc, field_name)) == 0 :
@@ -50,15 +50,14 @@ def populate_mp (fcs, field_name, field_value, log_file):
         raise  
     
 def populate (feature_class_folder, field_name, field_value):
-    log (feature_class_folder)
-    log (field_name)
-    log_mp_fn = arcpy.env.scratchFolder + '/log_populate_field.txt'
+    log ('Gathering a list of feature class names in ' + feature_class_folder)
     # Get a list of all requested feature classes
     arcpy.env.workspace = feature_class_folder
     fcs = [feature_class_folder + '/' + fc_name for fc_name in arcpy.ListFeatureClasses()]
             
     if len(fcs) > 100 and field_value != 'UNIQUE_ID': 
         # Use multiprocessing support to do the work
+        log_mp_fn = arcpy.env.scratchFolder + '/log_populate_field.txt'
         multiprocessing.set_executable(os.path.join(common_functions.get_install_path(), 'pythonw.exe'))
         log('Launching ' + str(_threads) + ' worker processes')
         log('Logging multiprocess activity to ' + log_mp_fn)

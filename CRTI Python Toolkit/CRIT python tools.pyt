@@ -32,8 +32,24 @@ class prepare_canopy_data(object):
             datatype="Folder",
             parameterType="Required",
             direction="Input")
-        tile_folder.value = r'D:\\CRTI\\GIS data\\DP_sample_tile_block'
+        tile_folder.value = r'D:\CRTI\GIS data\DP_sample_tile_block'
+                
+        tile_dimension = arcpy.Parameter(
+            displayName="Tile dimension size (feet)",
+            name="tile_dimension",
+            datatype="Double",
+            parameterType="Required",
+            direction="Input")
+        tile_dimension.value = 2500.0
         
+        ndvi_raster = arcpy.Parameter(
+            displayName="NDVI raster file",
+            name="ndvi_raster",
+            datatype="File",
+            parameterType="Required",
+            direction="Input")
+        ndvi_raster.value =r'D:\CRTI\GIS data\Earth Engine\DupageNDVI\DuPage_SampleArea_least_recent.tif'
+
         output_fc = arcpy.Parameter(
             displayName="Output feature class",
             name="output_fc",
@@ -42,7 +58,7 @@ class prepare_canopy_data(object):
             direction="Output")
         output_fc.value = arcpy.env.scratchGDB + '/prepared_canopy_data'
         
-        params = [tile_folder,output_fc]
+        params = [tile_folder, tile_dimension, ndvi_raster, output_fc]
         return params
 
     def isLicensed(self):
@@ -62,6 +78,6 @@ class prepare_canopy_data(object):
 
     def execute(self, parameters, messages):
         import prepare_canopy_data
-        prepare_canopy_data.prepare_canopy_data(parameters[0].valueAsText, parameters[1].valueAsText)        
+        prepare_canopy_data.prepare_canopy_data(parameters[0].valueAsText, parameters[1].valueAsText, parameters[2].valueAsText, parameters[3].valueAsText)        
         return
 

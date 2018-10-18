@@ -2,7 +2,7 @@
 # ---------------------------------------------------------------------------
 
 # To run from Spyder iPython console:
-# runfile('D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit/prepare_canopy_data.py', wdir='D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit', args="'D:\\CRTI\\GIS data\\DP_sample_tile_block' 'D:/Temp/prepared_canopy_data.shp'")
+# runfile('D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit/prepare_canopy_data.py', wdir='D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit', args="'D:\\CRTI\\GIS data\\DP_sample_tile_block' '2500.0' 'D:/Temp/prepared_canopy_data.shp'")
 
 # To run under ArcGIS python, enter these commands from the DOS window
 #   cd D:\CRTI\python_projects\ArcGIS-scripts\CRTI Python Toolkit\
@@ -16,26 +16,33 @@ import sys
 import common_functions
 common_functions.add_arcgis_to_sys_path()
 import arcpy
+import arcpy.sa
 import populate_field
 import populate_folder_field
 import merge_folder
 import interpolate_tile_extents
 import merge_fence_sitters
 import fix_file_names
-
+import tile_file_names
+import join_files
 
 TILE_COLUMN_NAME = 'TileId'
 POLYGON_ID_COLUMN_NAME = 'PolygonId'
 CLUMP_ID_COLUMN_NAME = 'ClumpId'
-TILE_DIMENSION = 2500.0
+#tile_dimension = 2500.0
 
-def prepare_canopy_data (input_tile_folder, output_fc):
+def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster, output_fc):
 
     arcpy.env.overwriteOutput = True
     arcpy.env.scratchWorkspace = os.getenv('USERPROFILE') + '\\Documents\\ArcGIS'
-    
+
     step_count = 0
-    step_total = 11
+    step_total = 14
+    
+    step_count += 1       
+    tile_file_name_table = arcpy.env.scratchGDB + '\\tile_file_names'
+    common_functions.step_header (step_count, step_total, 'Collecting tile file names', [input_tile_folder], [input_tile_folder])
+    tile_file_names.create_table(input_tile_folder, tile_file_name_table)
 
     step_count += 1       
     common_functions.step_header (step_count, step_total, 'Fixing up tile file names', [input_tile_folder], [input_tile_folder])
@@ -57,7 +64,7 @@ def prepare_canopy_data (input_tile_folder, output_fc):
     step_count += 1       
     create_fence_lines_output_fc = arcpy.env.scratchGDB + '\\fence_lines'
     common_functions.step_header (step_count, step_total, 'Creating fence lines', [input_tile_folder], [create_fence_lines_output_fc])
-    interpolate_tile_extents.main_process_fc_files(input_tile_folder, create_fence_lines_output_fc, TILE_DIMENSION)
+    interpolate_tile_extents.main_process_fc_files(input_tile_folder, tile_dimension, create_fence_lines_output_fc)
 
     step_count += 1       
     merged_tiles_as_layer = arcpy.env.scratchGDB + '\\merged_tiles_as_layer'
@@ -81,17 +88,27 @@ def prepare_canopy_data (input_tile_folder, output_fc):
     common_functions.step_header (step_count, step_total, 'Append ClumpId to merged tiles', [merged_tiles_unclumped, fence_sitter_clumps_dissolved], [merged_tiles_clumped])
     arcpy.SpatialJoin_analysis(merged_tiles_unclumped, fence_sitter_clumps_dissolved, merged_tiles_clumped, "JOIN_ONE_TO_ONE", "KEEP_ALL")
 
-    step_count += 1       
-    common_functions.step_header (step_count, step_total, 'Stitching adjacent fence sitters together', [merged_tiles_clumped], [output_fc])
-    merge_fence_sitters.merge(merged_tiles_clumped, output_fc)
+    step_count += 1
+    canopies_without_ndvi = arcpy.env.scratchGDB + '\\canopies_without_ndvi'       
+    common_functions.step_header (step_count, step_total, 'Stitching adjacent fence sitters together', [merged_tiles_clumped], [canopies_without_ndvi])
+    merge_fence_sitters.merge(merged_tiles_clumped, canopies_without_ndvi)
 
     step_count += 1       
+    zonal_ndvi = arcpy.env.scratchGDB + '\\zonal_ndvi'
+    common_functions.step_header (step_count, step_total, 'Computing NDVI zonal statistics', [canopies_without_ndvi, ndvi_raster], [zonal_ndvi])
+    arcpy.sa.ZonalStatisticsAsTable(canopies_without_ndvi, POLYGON_ID_COLUMN_NAME, ndvi_raster, zonal_ndvi)
+
+    step_count += 1       
+    common_functions.step_header (step_count, step_total, 'Appending NDVI statistics', [canopies_without_ndvi, zonal_ndvi], [output_fc])
+    join_files.join(canopies_without_ndvi, zonal_ndvi, POLYGON_ID_COLUMN_NAME, POLYGON_ID_COLUMN_NAME, '', output_fc)
+    
+    step_count += 1       
     common_functions.step_header (step_count, step_total, 'Cleaning up', [], [])
-    arcpy.DeleteField_management(output_fc, ['Join_Count', 'Shape_Length_1', 'Shape_Area_1'])
+    arcpy.DeleteField_management(output_fc, ['Join_Count', 'Shape_Length_1', 'Shape_Area_1', 'PolygonId_1', 'COUNT', 'AREA_1'])
 
 
 if __name__ == '__main__':
-     prepare_canopy_data(sys.argv[1], sys.argv[2])
+     prepare_canopy_data(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4])
 
 
 #rcpy.MakeFeatureLayer_management(Merged_tiles, Merged_tiles__as_layer_, "", "", "")

@@ -26,6 +26,11 @@ import arcpy
 def log (message):
     common_functions.log(message)
     
+def isOptimizable (fn):
+    desc = arcpy.Describe(fn)
+    return (desc.dataType == 'ShapeFile' or desc.dataType == 'Table' or desc.dataType == 'FeatureClass') and not desc.name.startswith('in_memory\\')
+
+    
 def import_if_text_file (in_file, temporary_assets) :
     in_file_desc = arcpy.Describe(in_file)
     if in_file_desc.dataType == 'TextFile':
@@ -38,19 +43,20 @@ def import_if_text_file (in_file, temporary_assets) :
         return in_file
     
 def move_to_in_memory (in_file, temporary_assets):
-    in_file_desc = arcpy.Describe(in_file)
-    if in_file_desc.dataType == 'ShapeFile' and not in_file_desc.name.startswith('in_memory\\'):
+    if (isOptimizable(in_file)):
         log('Importing into in-memory shape file: ' + in_file)
-        in_mem_file = 'in_memory\\' + in_file_desc.baseName
-        arcpy.CopyFeatures_management(in_file, in_mem_file)
+        in_mem_file = 'in_memory\\' + arcpy.Describe(in_file).baseName
+        if arcpy.Describe(in_file).dataType == 'Table':
+            arcpy.CopyRows_management(in_file, in_mem_file)
+        else:    
+            arcpy.CopyFeatures_management(in_file, in_mem_file)
         temporary_assets.append(in_mem_file)
         return in_mem_file
     else:
         return in_file
     
 def create_index (in_file, join_attr):
-    in_file_desc = arcpy.Describe(in_file)
-    if in_file_desc.dataType == 'ShapeFile' and not in_file_desc.name.startswith('in_memory\\'):
+    if (isOptimizable(in_file)):
         if join_attr not in [index.name for index in arcpy.ListIndexes(in_file)]:
             log('Indexing attribute ' + join_attr + ' in ' + in_file)  
             arcpy.AddIndex_management(in_file, [join_attr], join_attr+'Idx', 'UNIQUE', 'ASCENDING')
