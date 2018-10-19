@@ -6,14 +6,6 @@ import time
 import os
 import sys
 
-__arc_gis_dir = "C:\\Program Files (x86)\\ArcGIS\\Desktop10.6\\"
-__arc_gis_path = [__arc_gis_dir + "bin",
-                __arc_gis_dir + "ArcPy",
-                __arc_gis_dir + "ArcToolBox\Scripts"]
-for p in __arc_gis_path: 
-    if p not in sys.path: sys.path += [p]
-
-
 def add_arcgis_to_sys_path ():
     __arc_gis_dir = "C:\\Program Files (x86)\\ArcGIS\\Desktop10.6\\"
     __arc_gis_path = [__arc_gis_dir + "bin",
@@ -22,19 +14,29 @@ def add_arcgis_to_sys_path ():
     for p in __arc_gis_path: 
         if p not in sys.path: sys.path += [p]
 
+add_arcgis_to_sys_path()
+
 import arcpy
 
 def log (message):
     message = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + ": " + str(os.getpid()) + ": " + message
-    print (message)
-    sys.stdout.flush()
+    # Log to a file in the scratch folder
+    log_file = os.path.join(os.path.normpath(arcpy.env.scratchFolder), 'log.txt')
+    log_file = open(log_file, "a+", 0)
+    log_file.write(message + '\n')
+    log_file.close()
+    # Log to stdout (this is a hack to get output to the iPython console)
+    if r'\ArcGIS' not in sys.executable:
+        print (message)
+        sys.stdout.flush()
+    # Log to arcGIS
     arcpy.AddMessage(message)
     
 def log_mp (log_file, message):
-    # Log the message to both a file and stdout.  Note that collisions may occur when logging to a
-    # file from multiple processes and logging to stdout when running from a spawned processor
+    # Log the message to both a file and arcGIS.  Note that collisions may occur when logging
+    # from multiple processes. Logging to stdout when running from a spawned processor
     # does not work on windows
-    message = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + ": " + str(os.getpid()) + ": " + message
+    message = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + ": " + str(os.getpid()) + ": " + message 
     log_file = open(log_file, "a+", 0)
     log_file.write(message + '\n')
     log_file.close()

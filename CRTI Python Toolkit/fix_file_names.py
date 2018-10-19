@@ -27,6 +27,7 @@ def log (message):
 def fixup (tile_file_names_table):
     # Get the file file names
     fns = tile_file_names.read_file_names(tile_file_names_table)
+    fns_fixed = list()
     #loop through the name and rename
     count = 1
     for fn in fns:
@@ -38,9 +39,14 @@ def fixup (tile_file_names_table):
             new_fn = desc.path + '/' + desc.baseName.replace('.', '_') + '.' + desc.extension
             try:
                 os.rename(desc.catalogPath, new_fn)
+                fns_fixed.append(new_fn)
             except:
                 log ('Failed renaming ' + fn + ' to ' + new_fn)
+        else:
+            fns_fixed.append(fn)
         count += 1
+    # Recreate the table of file names with the fixed up names
+    tile_file_names.write_file_names(tile_file_names_table, fns_fixed)
         
         
 if __name__ == '__main__':

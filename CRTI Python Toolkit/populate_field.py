@@ -54,7 +54,7 @@ def populate (fcs, field_name, field_value):
             
     if len(fcs) > 100 and field_value != 'UNIQUE_ID': 
         # Use multiprocessing support to do the work
-        log_mp_fn = arcpy.env.scratchFolder + '/log_populate_field.txt'
+        log_mp_fn = arcpy.env.scratchFolder + '/log_mp.txt'
         multiprocessing.set_executable(os.path.join(common_functions.get_install_path(), 'pythonw.exe'))
         log('Launching ' + str(_threads) + ' worker processes')
         log('Logging multiprocess activity to ' + log_mp_fn)

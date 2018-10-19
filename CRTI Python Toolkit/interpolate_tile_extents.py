@@ -83,7 +83,7 @@ def adjust_boundary (reference, boundary, direction, step):
 
 def main_process_fc_files (tile_file_names_table, tile_dim, fc_output_file):
     fc_output_path, fc_output_name = os.path.split(fc_output_file)
-    log_fn = arcpy.env.scratchFolder + '/log_mp.txt'        
+    log_fn = os.path.join(arcpy.env.scratchFolder, 'log_mp.txt')        
     tile_dim = float(tile_dim)
     
     # Create the output directory if it doesn't already exist
@@ -95,15 +95,9 @@ def main_process_fc_files (tile_file_names_table, tile_dim, fc_output_file):
         arcpy.Delete_management(fc_output_file)
     
     # Get a list of the input feature classes
-    name_list = tile_file_names.read_file_names(tile_file_names_table)    
-    
+    name_list = tile_file_names.read_file_names(tile_file_names_table)        
     # TEMP _ DON'T FORGET TO REMOVE THIS!!!
 #    name_list = name_list * 10
-    
-    # Create the multiprocessor log file if it doesn't already exist
-    if os.path.exists(log_fn):
-        os.remove(log_fn)
-    
 
     if (len(name_list) > 0):
         # Use the first shape file to get the spacial reference (should the same for all)

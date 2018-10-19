@@ -48,7 +48,7 @@ def write_file_names (table, file_names):
 def create_table (input_fc_folder, output_table):
     log ('Gathering file names from ' + input_fc_folder)
     arcpy.env.workspace = input_fc_folder
-    names = [input_fc_folder + '/' + fc_name for fc_name in arcpy.ListFeatureClasses()]   
+    names = [os.path.join(input_fc_folder, fc_name) for fc_name in arcpy.ListFeatureClasses()]   
     log (str(len(names)) + ' files found')
     write_file_names (output_table, names)
 #    x = read_file_names(output_table)

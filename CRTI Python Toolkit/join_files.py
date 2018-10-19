@@ -57,7 +57,7 @@ def move_to_in_memory (in_file, temporary_assets):
     
 def create_index (in_file, join_attr):
     if (isOptimizable(in_file)):
-        if join_attr not in [index.name for index in arcpy.ListIndexes(in_file)]:
+        if join_attr not in [index.fields[0].name for index in arcpy.ListIndexes(in_file)]:
             log('Indexing attribute ' + join_attr + ' in ' + in_file)  
             arcpy.AddIndex_management(in_file, [join_attr], join_attr+'Idx', 'UNIQUE', 'ASCENDING')
     return                                  
