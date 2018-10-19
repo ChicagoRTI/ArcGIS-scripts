@@ -53,9 +53,7 @@ def get_tile_extents_mp (name_list, log_file):
         count = 1
         tiles = dict()
         for file_name in name_list:
-#            if count % ((len(name_list)/10)+1) == 0:
-            if count % ((len(name_list)/100)+1) == 0:
-                common_functions.log_mp(log_file, "Reading shape file " + str(count) + ' of ' + str(len(name_list)))
+            common_functions.log_progress_mp (log_file, "Reading shape file", len(name_list), count)    
             # Get the extent information
             extent = arcpy.Describe(file_name).extent
             tiles[file_name] = extent.XMin, extent.YMin, extent.XMax, extent.YMax, extent.width, extent.height
@@ -97,7 +95,7 @@ def main_process_fc_files (tile_file_names_table, tile_dim, fc_output_file):
     # Get a list of the input feature classes
     name_list = tile_file_names.read_file_names(tile_file_names_table)        
     # TEMP _ DON'T FORGET TO REMOVE THIS!!!
-#    name_list = name_list * 10
+#    name_list = name_list * 25
 
     if (len(name_list) > 0):
         # Use the first shape file to get the spacial reference (should the same for all)

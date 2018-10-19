@@ -5,6 +5,9 @@
 import time
 import os
 import sys
+import multiprocessing
+
+_threads = multiprocessing.cpu_count()
 
 def add_arcgis_to_sys_path ():
     __arc_gis_dir = "C:\\Program Files (x86)\\ArcGIS\\Desktop10.6\\"
@@ -43,7 +46,15 @@ def log_mp (log_file, message):
  #   print (message)
  #   sys.stdout.flush()
     arcpy.AddMessage(message)
-    
+
+def log_progress (message, max_range, step_count):
+    if step_count % ((max_range/100)+1) == 0:
+        log (message + ' (' + str(step_count) + ' of ' + str(max_range) + ')')
+
+def log_progress_mp (log_file, message, max_range, step_count):
+    if step_count % ((max_range/(100/_threads))+1) == 0:
+        log_mp (log_file, message + ' (' + str(step_count) + ' of ' + str(max_range) + ')')
+
     
 def get_install_path():
     return sys.exec_prefix  
@@ -62,3 +73,6 @@ def step_header (step_count, step_total, message, inputs, outputs):
     log('')
     log('Step ' + str(step_count) + ' of ' + str(step_total))
     log('--------------------------------------------------')
+
+
+

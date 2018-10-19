@@ -31,8 +31,7 @@ def fixup (tile_file_names_table):
     #loop through the name and rename
     count = 1
     for fn in fns:
-        if count % ((len(fns)/100)+1) == 0:
-            log('Checking file for fixup ' + str(count) + ' of ' + str(len(fns)))
+        common_functions.log_progress ('Checking file for fixup', len(fns), count)    
 
         desc = arcpy.Describe(fn)        
         if '.' in desc.baseName:
