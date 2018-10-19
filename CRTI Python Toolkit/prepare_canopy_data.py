@@ -54,7 +54,7 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster, start_s
     
         
         if step_count >= step_start:
-            common_functions.step_header (step_count, step_total, 'Collecting tile file names', [input_tile_folder], [input_tile_folder])
+            common_functions.step_header (step_count, step_total, 'Collecting tile file names', [input_tile_folder], [])
             tile_file_names.create_table(input_tile_folder, tile_file_name_table)
         step_count += 1       
     

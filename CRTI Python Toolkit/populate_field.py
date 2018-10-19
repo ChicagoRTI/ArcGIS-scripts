@@ -44,8 +44,7 @@ def populate_mp (fcs, field_name, field_value, log_file):
         # Add a new attribute to all of the shape files, then populate it with the shape file name
         fc_count = 1
         for fc in fcs:
-            if fc_count % ((len(fcs)/(100/_threads))+1) == 0:
-                common_functions.log_mp(log_file, 'Populating ' + field_name + ' with ' + field_value + ' in ' + fc + ' (' + str(fc_count) + ' of ' + str(len(fcs)) + ')')
+            common_functions.log_progress_mp (log_file, 'Populating ' + field_name + ' with ' + field_value + ' in ' + fc, len(fcs), fc_count)    
             populate_fc (fc, field_name, field_value)    
             fc_count = fc_count+1
     except Exception as e:
@@ -70,8 +69,6 @@ def populate (fcs, field_name, field_value):
     else:
         fc_count = 1
         for fc in fcs:
-#            if fc_count % ((len(fcs)/100)+1) == 0:
-#                log('Populating ' + field_name + ' with ' + field_value + ' in ' + fc + ' (' + str(fc_count) + ' of ' + str(len(fcs)) + ')')
             common_functions.log_progress ('Populating ' + field_name + ' with ' + field_value + ' in ' + fc, len(fcs), fc_count)    
             populate_fc (fc, field_name, field_value)    
             fc_count = fc_count+1

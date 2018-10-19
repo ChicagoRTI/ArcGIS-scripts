@@ -18,7 +18,6 @@ common_functions.add_arcgis_to_sys_path()
 import arcpy
 import tile_file_names
 
-dir = 'D:/CRTI/GIS data/will_county_tree_crowns_sample/test'
 
 def log (message):
     common_functions.log(message)

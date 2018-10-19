@@ -63,6 +63,7 @@ def step_header (step_count, step_total, message, inputs, outputs):
     log('')
     log('')
     log('==================================================')
+    log('Step ' + str(step_count) + ' of ' + str(step_total))
     log('')
     log(message)
     log('')
@@ -71,7 +72,6 @@ def step_header (step_count, step_total, message, inputs, outputs):
     for m in outputs:
         log('Output: ' + m)
     log('')
-    log('Step ' + str(step_count) + ' of ' + str(step_total))
     log('--------------------------------------------------')
 
 
