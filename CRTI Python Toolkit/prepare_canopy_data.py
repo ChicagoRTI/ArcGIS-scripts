@@ -44,8 +44,7 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, 
     
         tile_file_name_table = os.path.join(arcpy.env.scratchGDB, 'tile_file_names')
         merged_tiles_unclumped = os.path.join(arcpy.env.scratchGDB, 'merged_tiles_unclumped')
-        create_fence_lines_output_fc = os.path.join(arcpy.env.scratchGDB, 'fence_lines')
-        merged_tiles_as_layer = os.path.join(arcpy.env.scratchGDB, 'merged_tiles_as_layer')
+        fence_lines = os.path.join(arcpy.env.scratchGDB, 'fence_lines')
         fence_sitter_clumps_undissolved = os.path.join(arcpy.env.scratchGDB, 'fence_sitter_clumps_undissolved')
         fence_sitter_clumps_dissolved = os.path.join(arcpy.env.scratchGDB, 'fence_sitter_clumps_dissolved')
         merged_tiles_clumped = os.path.join(arcpy.env.scratchGDB, 'merged_tiles_clumped')
@@ -80,15 +79,13 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, 
         step_count += 1       
         
         if step_count >= step_start:
-            common_functions.step_header (step_count, step_total, 'Creating fence lines', [tile_file_name_table], [create_fence_lines_output_fc])
-            interpolate_tile_extents.main_process_fc_files(tile_file_name_table, tile_dimension, create_fence_lines_output_fc)
+            common_functions.step_header (step_count, step_total, 'Creating fence lines', [tile_file_name_table], [fence_lines])
+            interpolate_tile_extents.main_process_fc_files(tile_file_name_table, tile_dimension, fence_lines)
         step_count += 1       
     
         if step_count >= step_start:
-            common_functions.step_header (step_count, step_total, 'Creating fence sitters feature class (all polygons that intersect a fence line)', [merged_tiles_unclumped, create_fence_lines_output_fc], [fence_sitter_clumps_undissolved])
-            arcpy.MakeFeatureLayer_management(merged_tiles_unclumped, merged_tiles_as_layer, "", "", "")
-            arcpy.SelectLayerByLocation_management(merged_tiles_as_layer, "INTERSECT", create_fence_lines_output_fc, "", "NEW_SELECTION", "NOT_INVERT")
-            arcpy.CopyFeatures_management(merged_tiles_as_layer, fence_sitter_clumps_undissolved, "", "0", "0", "0")
+            common_functions.step_header (step_count, step_total, 'Creating fence sitters feature class (all polygons that intersect a fence line)', [merged_tiles_unclumped, fence_lines], [fence_sitter_clumps_undissolved])
+            arcpy.SpatialJoin_analysis(merged_tiles_unclumped, fence_lines, fence_sitter_clumps_undissolved, 'JOIN_ONE_TO_ONE', 'KEEP_COMMON', '', 'INTERSECT')
         step_count += 1       
     
         if step_count >= step_start:
