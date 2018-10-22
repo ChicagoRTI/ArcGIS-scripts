@@ -2,7 +2,7 @@
 # ---------------------------------------------------------------------------
 
 # To run from Spyder iPython console:
-# runfile('D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit/prepare_canopy_data.py', wdir='D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit', args="'D:\\CRTI\\GIS data\\DP_sample_tile_block' '2500.0' 'D:/Temp/prepared_canopy_data.shp'")
+# runfile('D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit/prepare_canopy_data.py', wdir='D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit', args="'D:\\CRTI\\GIS data\\DP_sample_tile_block' '2500.0' 'D:/CRTI/GIS data/Earth Engine/DupageNDVI' '1' 'D:/Temp/prepared_canopy_data.shp'")
 
 # To run under ArcGIS python, enter these commands from the DOS window
 #   cd D:\CRTI\python_projects\ArcGIS-scripts\CRTI Python Toolkit
@@ -30,7 +30,7 @@ TILE_COLUMN_NAME = 'TileId'
 POLYGON_ID_COLUMN_NAME = 'PolygonId'
 CLUMP_ID_COLUMN_NAME = 'ClumpId'
 
-def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster, start_step, output_fc):
+def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, start_step, output_fc):
     try:
         arcpy.env.overwriteOutput = True
         arcpy.env.scratchWorkspace = os.path.normpath(os.path.join(os.getenv('USERPROFILE'),'Documents/ArcGIS'))
@@ -40,7 +40,7 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster, start_s
     
         step_start = int(start_step)
         step_count = 1
-        step_total = 14
+        step_total = 15
     
         tile_file_name_table = os.path.join(arcpy.env.scratchGDB, 'tile_file_names')
         merged_tiles_unclumped = os.path.join(arcpy.env.scratchGDB, 'merged_tiles_unclumped')
@@ -49,6 +49,7 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster, start_s
         fence_sitter_clumps_undissolved = os.path.join(arcpy.env.scratchGDB, 'fence_sitter_clumps_undissolved')
         fence_sitter_clumps_dissolved = os.path.join(arcpy.env.scratchGDB, 'fence_sitter_clumps_dissolved')
         merged_tiles_clumped = os.path.join(arcpy.env.scratchGDB, 'merged_tiles_clumped')
+        merged_ndvi_rasters = os.path.join(arcpy.env.scratchGDB, 'merged_ndvi_rasters')
         canopies_without_ndvi = os.path.join(arcpy.env.scratchGDB, 'canopies_without_ndvi')       
         zonal_ndvi = os.path.join(arcpy.env.scratchGDB, 'zonal_ndvi')
     
@@ -70,7 +71,6 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster, start_s
         
         if step_count >= step_start:
             common_functions.step_header (step_count, step_total, 'Merging tiles into a single feature class', [tile_file_name_table], [merged_tiles_unclumped])
-    #        merge_folder.merge(input_tile_folder, merged_tiles_unclumped) 
             arcpy.Merge_management(tile_file_names.read_file_names(tile_file_name_table), merged_tiles_unclumped)
         step_count += 1       
         
@@ -110,10 +110,16 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster, start_s
             common_functions.step_header (step_count, step_total, 'Stitching adjacent fence sitters together', [merged_tiles_clumped], [canopies_without_ndvi])
             merge_fence_sitters.merge(merged_tiles_clumped, canopies_without_ndvi)
         step_count += 1       
-    
+
         if step_count >= step_start:
-            common_functions.step_header (step_count, step_total, 'Computing NDVI zonal statistics', [canopies_without_ndvi, ndvi_raster], [zonal_ndvi])
-            arcpy.sa.ZonalStatisticsAsTable(canopies_without_ndvi, POLYGON_ID_COLUMN_NAME, ndvi_raster, zonal_ndvi)
+            common_functions.step_header (step_count, step_total, 'Merge NDVI rasters', [ndvi_raster_folder], [merged_ndvi_rasters])
+            arcpy.env.workspace = ndvi_raster_folder
+            arcpy.MosaicToNewRaster_management(arcpy.ListRasters('', ''), os.path.dirname(merged_ndvi_rasters), os.path.basename(merged_ndvi_rasters), '', '32_BIT_FLOAT', '', 1)
+        step_count += 1   
+        
+        if step_count >= step_start:
+            common_functions.step_header (step_count, step_total, 'Computing NDVI zonal statistics', [canopies_without_ndvi, merged_ndvi_rasters], [zonal_ndvi])
+            arcpy.sa.ZonalStatisticsAsTable(canopies_without_ndvi, POLYGON_ID_COLUMN_NAME, merged_ndvi_rasters, zonal_ndvi)
         step_count += 1       
     
         if step_count >= step_start:

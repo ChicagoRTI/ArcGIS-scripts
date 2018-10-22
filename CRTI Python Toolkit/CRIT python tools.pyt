@@ -45,10 +45,10 @@ class prepare_canopy_data(object):
         ndvi_raster = arcpy.Parameter(
             displayName="NDVI raster file",
             name="ndvi_raster",
-            datatype="File",
+            datatype="Folder,
             parameterType="Required",
             direction="Input")
-        ndvi_raster.value =r'D:\CRTI\GIS data\Earth Engine\DupageNDVI\DuPage_SampleArea_least_recent.tif'
+        ndvi_raster.value =r'D:\CRTI\GIS data\Earth Engine\DupageNDVI'
         
         start_step = arcpy.Parameter(
             displayName="Start step",
@@ -86,6 +86,11 @@ class prepare_canopy_data(object):
 
     def execute(self, parameters, messages):
         import prepare_canopy_data
-        prepare_canopy_data.prepare_canopy_data(parameters[0].valueAsText, parameters[1].valueAsText, parameters[2].valueAsText, parameters[3].valueAsText, parameters[4].valueAsText)        
+        prepare_canopy_data.prepare_canopy_data(
+            os.normpath(parameters[0].valueAsText), 
+            parameters[1].valueAsText, 
+            os.normpath(parameters[2].valueAsText), 
+            parameters[3].valueAsText, 
+            os.normpath(parameters[4].valueAsText))        
         return
 
