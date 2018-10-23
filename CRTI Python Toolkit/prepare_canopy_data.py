@@ -28,10 +28,10 @@ TILE_COLUMN_NAME = 'TileId'
 POLYGON_ID_COLUMN_NAME = 'PolygonId'
 CLUMP_ID_COLUMN_NAME = 'ClumpId'
 
-def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, start_step, output_fc):
+def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, start_step, scratch_workspace, output_fc):
     try:
         arcpy.env.overwriteOutput = True
-        arcpy.env.scratchWorkspace = os.path.normpath(os.path.join(os.getenv('USERPROFILE'),'Documents/ArcGIS'))
+        arcpy.env.scratchWorkspace = os.path.normpath(scratch_workspace)
         arcpy.CheckOutExtension("Spatial")
     
         common_functions.log("Logging to " + arcpy.env.scratchFolder)
@@ -132,6 +132,6 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, 
 
 
 if __name__ == '__main__':
-     prepare_canopy_data(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
+     prepare_canopy_data(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6])
 
 

@@ -45,7 +45,7 @@ class prepare_canopy_data(object):
         ndvi_raster = arcpy.Parameter(
             displayName="NDVI raster file",
             name="ndvi_raster",
-            datatype="Folder,
+            datatype="Folder",
             parameterType="Required",
             direction="Input")
         ndvi_raster.value =r'D:\CRTI\GIS data\Earth Engine\DupageNDVI'
@@ -57,6 +57,14 @@ class prepare_canopy_data(object):
             parameterType="Required",
             direction="Input")
         start_step.value = 1
+        
+        scratch_workspace = arcpy.Parameter(
+            displayName="Scratch workspace",
+            name="scratch_workspace",
+            datatype="Folder",
+            parameterType="Required",
+            direction="Input")
+        scratch_workspace.value = os.getenv('USERPROFILE') + r'\Documents\ArcGIS' 
 
         output_fc = arcpy.Parameter(
             displayName="Output feature class",
@@ -66,7 +74,7 @@ class prepare_canopy_data(object):
             direction="Output")
         output_fc.value = arcpy.env.scratchGDB + '/prepared_canopy_data'
         
-        params = [tile_folder, tile_dimension, ndvi_raster, start_step, output_fc]
+        params = [tile_folder, tile_dimension, ndvi_raster, start_step, scratch_workspace, output_fc]
         return params
 
     def isLicensed(self):
@@ -87,10 +95,11 @@ class prepare_canopy_data(object):
     def execute(self, parameters, messages):
         import prepare_canopy_data
         prepare_canopy_data.prepare_canopy_data(
-            os.normpath(parameters[0].valueAsText), 
+            os.path.normpath(parameters[0].valueAsText), 
             parameters[1].valueAsText, 
-            os.normpath(parameters[2].valueAsText), 
+            os.path.normpath(parameters[2].valueAsText), 
             parameters[3].valueAsText, 
-            os.normpath(parameters[4].valueAsText))        
+            os.path.normpath(parameters[4].valueAsText),
+            os.path.normpath(parameters[5].valueAsText))        
         return
 
