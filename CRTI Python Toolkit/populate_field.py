@@ -56,7 +56,7 @@ def populate_mp (fcs, field_name, field_value, log_file):
     
 def populate (fcs, field_name, field_value):
             
-    if len(fcs) > 1 and field_value != 'UNIQUE_ID': 
+    if len(fcs) > sys.maxint and field_value != 'UNIQUE_ID':  # turn off mp support due to ESRI bug
         # Use multiprocessing support to do the work
         log_mp_fn = os.path.join(arcpy.env.scratchFolder, 'log_mp.txt')
         multiprocessing.set_executable(os.path.join(common_functions.get_install_path(), 'pythonw.exe'))
