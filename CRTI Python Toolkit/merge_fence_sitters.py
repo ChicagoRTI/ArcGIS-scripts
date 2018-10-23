@@ -17,9 +17,11 @@ import math
 import common_functions
 common_functions.add_arcgis_to_sys_path()
 import arcpy
+import os
 
 
 _fc_mem = "in_memory\\fence_sitters"
+_use_fc_mem = False
 
 
 
@@ -39,7 +41,7 @@ def weighted_mean (measure_1, weight_1, measure_2, weight_2):
     return ((measure_1*weight_1) + (measure_2*weight_2)) / (weight_1 + weight_2)
 
 
-def process_clumped_tile_pair (clump_id, tile_pair, sr):
+def process_clumped_tile_pair (fc, clump_id, tile_pair, sr):
     tile_id_a = tile_pair[0]
     tile_id_b = tile_pair[1]
     
@@ -74,7 +76,7 @@ def process_clumped_tile_pair (clump_id, tile_pair, sr):
     query = '("TileId"=\'' + tile_id_a + "' OR " + '"TileId"=\'' + tile_id_b + "') AND (" + '"ClumpId"=' + str(clump_id) + ')'
     ####################################################################### 
     # Create polygon object for all fence sitters
-    with arcpy.da.SearchCursor(_fc_mem, attr_list, query, sr, False) as cursor:
+    with arcpy.da.SearchCursor(fc, attr_list, query, sr, False) as cursor:
         for attrs in cursor:
             # Figure out which side of the fence it is on
             oid =  str(attrs[PolygonId])
@@ -109,7 +111,7 @@ def process_clumped_tile_pair (clump_id, tile_pair, sr):
 
     #######################################################################        
     # Update the shapefile. Replace the A side with the union, then delete the B side
-    with arcpy.da.UpdateCursor(_fc_mem, attr_list, query ,sr, False) as cursor:
+    with arcpy.da.UpdateCursor(fc, attr_list, query ,sr, False) as cursor:
         for attrs in cursor:
             # Check if the current tree needs to be joined or delted
             if (attrs[TileId] == tile_id_a) and (str(attrs[PolygonId]) in union_polygons.keys()):
@@ -139,7 +141,7 @@ def process_clumped_tile_pair (clump_id, tile_pair, sr):
 
 
 
-def get_clumped_tile_pairs (sr):
+def get_clumped_tile_pairs (fc, sr):
     
     attr_list = ['TileId',        # 0
                  'ClumpId']       # 1
@@ -150,7 +152,7 @@ def get_clumped_tile_pairs (sr):
     clumps = dict()
     query = '("ClumpId" > 0)'     
     # Read in all polygons that are in a clump (which implies they are fence sitters)       
-    with arcpy.da.SearchCursor(_fc_mem, attr_list, query, sr, False) as cursor:
+    with arcpy.da.SearchCursor(fc, attr_list, query, sr, False) as cursor:
         for attrs in cursor:
             tile_id = attrs[TileId]
             clump_id = attrs[ClumpId]
@@ -178,15 +180,24 @@ def merge (fc_input, fc_output):
     log (fc_input)
     log (fc_output)
     # Copy the input feature class to memory 
-    arcpy.env.workspace = "in_memory" 
-    if arcpy.Exists(_fc_mem):
-        arcpy.Delete_management(_fc_mem)
+    if _use_fc_mem:        
+        arcpy.env.workspace = "in_memory" 
+        if arcpy.Exists(_fc_mem):
+            arcpy.Delete_management(_fc_mem)    
+        arcpy.CopyFeatures_management(fc_input, _fc_mem)
+        fc = _fc_mem
+    else:
+        desc = arcpy.Describe(fc_input)
+        if desc.extension == '' :
+            arcpy.env.workspace = os.path.dirname(desc.path)
+        else:
+            arcpy.env.workspace = desc.path
+        fc = fc_input
+            
     if arcpy.Exists(fc_output):
-        arcpy.Delete_management(fc_output)
-    arcpy.CopyFeatures_management(fc_input, _fc_mem)
-    
+        arcpy.Delete_management(fc_output)    
     # Get the list of clumps along with the tile pairs in each
-    clumped_tile_pairs = get_clumped_tile_pairs (sr)
+    clumped_tile_pairs = get_clumped_tile_pairs (fc, sr)
     
     # Process the set of tile pairs in each clump
     i=0
@@ -195,12 +206,15 @@ def merge (fc_input, fc_output):
         if i % ((len(clumped_tile_pairs)/100)+1) == 0:
             log ("Processing clump " + str(clump) + " (" + str(i) + " of " + str(len(clumped_tile_pairs)) + ")")
         for tile_pair in tile_pairs:
-            process_clumped_tile_pair(clump, tile_pair, sr)
+            process_clumped_tile_pair(fc, clump, tile_pair, sr)
             
     # Copy the in-memory feature class back to disk
     log ("Writing results to " + fc_output)
-    arcpy.CopyFeatures_management(_fc_mem, fc_output)
-    arcpy.Delete_management(_fc_mem)
+
+    arcpy.CopyFeatures_management(fc, fc_output)
+    if _use_fc_mem:        
+        arcpy.Delete_management(_fc_mem)
+        
 
 
 
