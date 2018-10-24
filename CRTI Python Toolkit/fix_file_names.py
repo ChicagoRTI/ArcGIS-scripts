@@ -25,7 +25,7 @@ def log (message):
 
 def fixup (tile_file_names_table):
     # Get the file file names
-    fns = tile_file_names.read_file_names(tile_file_names_table)
+    fns = [fn[0] for fn in tile_file_names.read_file_names(tile_file_names_table)]
     fns_fixed = list()
     #loop through the name and rename
     count = 1

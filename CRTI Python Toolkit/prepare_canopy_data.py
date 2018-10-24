@@ -24,7 +24,7 @@ import fix_file_names
 import tile_file_names
 import join_files
 
-TILE_COLUMN_NAME = 'TileId'
+TILE_ID_COLUMN_NAME = 'TileId'
 POLYGON_ID_COLUMN_NAME = 'PolygonId'
 CLUMP_ID_COLUMN_NAME = 'ClumpId'
 
@@ -63,7 +63,7 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, 
         
         if step_count >= step_start:
             common_functions.step_header (step_count, step_total, 'Populating TileId in all tiles', [input_tile_folder], [input_tile_folder])
-            populate_field.populate(tile_file_names.read_file_names(tile_file_name_table), TILE_COLUMN_NAME, 'FC_NAME') 
+            populate_field.populate([l + (TILE_ID_COLUMN_NAME,'LONG',) for l in tile_file_names.read_file_names(tile_file_name_table)]) 
         step_count += 1       
         
         if step_count >= step_start:
@@ -73,7 +73,7 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, 
         
         if step_count >= step_start:
             common_functions.step_header (step_count, step_total, 'Adding and populating PolygonId field', [merged_tiles_unclumped], [merged_tiles_unclumped])
-            populate_field.populate([merged_tiles_unclumped], POLYGON_ID_COLUMN_NAME, "UNIQUE_ID")
+            populate_field.populate([(merged_tiles_unclumped, 'UNIQUE_ID', POLYGON_ID_COLUMN_NAME, 'LONG')])
         step_count += 1       
         
         if step_count >= step_start:
@@ -93,7 +93,7 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, 
     
         if step_count >= step_start:
             common_functions.step_header (step_count, step_total, 'Adding and populating ClumpId', [fence_sitter_clumps_dissolved], [fence_sitter_clumps_dissolved])
-            populate_field.populate([fence_sitter_clumps_dissolved], CLUMP_ID_COLUMN_NAME, "UNIQUE_ID")
+            populate_field.populate([(fence_sitter_clumps_dissolved, 'UNIQUE_ID', CLUMP_ID_COLUMN_NAME, 'LONG')])
         step_count += 1       
     
         if step_count >= step_start:

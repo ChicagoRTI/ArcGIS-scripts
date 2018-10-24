@@ -92,3 +92,11 @@ def move_to_in_memory (fn, temporary_assets):
         return in_mem_file
     else:
         return fn
+
+def create_index (fn, fields, index_name):
+    if (isOptimizable(fn)):
+#        if attr not in [index.fields[0].name for index in arcpy.ListIndexes(fn)]:
+        if index_name not in [index.name for index in arcpy.ListIndexes(fn)]:
+            log('Creating index ' + index_name + ' in ' + fn)  
+            arcpy.AddIndex_management(fn, fields, index_name, 'UNIQUE', 'ASCENDING')
+    return 

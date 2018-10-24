@@ -93,7 +93,7 @@ def main_process_fc_files (tile_file_names_table, tile_dim, fc_output_file):
         arcpy.Delete_management(fc_output_file)
     
     # Get a list of the input feature classes
-    name_list = tile_file_names.read_file_names(tile_file_names_table)        
+    name_list = [fn[0] for fn in tile_file_names.read_file_names(tile_file_names_table)]        
     # TEMP _ DON'T FORGET TO REMOVE THIS!!!
 #    name_list = name_list * 25
 

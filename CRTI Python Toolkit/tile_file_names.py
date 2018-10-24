@@ -14,22 +14,23 @@ import common_functions
 common_functions.add_arcgis_to_sys_path()
 import arcpy
 
-_FIELD_NAME = 'FieldName'
+_TILE_NAME = 'TileName'
+_TILE_ID = 'TileId'
 
 def log (message):
     common_functions.log(message)
     return
 
-# Return the file names as a list
+# Return the file names/ids as a list of tuples <tile_name, tile_id>
 def read_file_names (table):
     names = list()
-    with arcpy.da.SearchCursor(table, [_FIELD_NAME]) as rows:
+    with arcpy.da.SearchCursor(table, [_TILE_NAME, _TILE_ID ]) as rows:
         for row in rows:
-            names.append(row[0])
+            names.append((row[0],row[1]))
         del rows
     return names
 
-# Write the list of file names to the output table
+# Write the list of file names/ids to the output table
 def write_file_names (table, file_names):
     log ('Creating output table ' + table)
     out_path, out_fc = os.path.split(table)
@@ -37,12 +38,15 @@ def write_file_names (table, file_names):
     if arcpy.Exists(table):
         arcpy.Delete_management(table)
     arcpy.CreateTable_management(out_path, out_fc)
-    arcpy.AddField_management(out_fc, _FIELD_NAME, 'TEXT', '512')
+    arcpy.AddField_management(out_fc, _TILE_NAME, 'TEXT', '512')
+    arcpy.AddField_management(out_fc, _TILE_ID, 'LONG')
 
-    log ('Writing file names to ' + table)    
-    with  arcpy.da.InsertCursor(out_fc, [_FIELD_NAME]) as rows:
+    log ('Writing file names to ' + table)
+    tile_id = 1    
+    with  arcpy.da.InsertCursor(out_fc, [_TILE_NAME, _TILE_ID]) as rows:
         for name in file_names:
-            rows.insertRow([name])
+            rows.insertRow([name, tile_id])
+            tile_id += 1
         del rows     
         
 def create_table (input_fc_folder, output_table):
