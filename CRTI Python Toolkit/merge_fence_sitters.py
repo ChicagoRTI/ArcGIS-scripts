@@ -74,9 +74,9 @@ def process_clumped_tile_pair (fc, clump_id, tile_pair, sr):
     ShapeIndex=11
     
     query = '("TileId"=' + str(tile_id_a) + " OR " + '"TileId"=' + str(tile_id_b) + ") AND (" + '"ClumpId"=' + str(clump_id) + ')'
-    ####################################################################### 
-    # Create polygon object for all fence sitters
-    with arcpy.da.SearchCursor(fc, attr_list, query, sr, False) as cursor:
+    with arcpy.da.UpdateCursor(fc, attr_list, query, sr, False) as cursor:
+        ####################################################################### 
+        # Create polygon object for all fence sitters
         for attrs in cursor:
             # Figure out which side of the fence it is on
             oid =  str(attrs[PolygonId])
@@ -84,34 +84,33 @@ def process_clumped_tile_pair (fc, clump_id, tile_pair, sr):
                 trees_a[oid] = attrs
             else:
                 trees_b[oid] = attrs
-    del cursor
+        
+        ####################################################################### 
+        # Create a "scorecard" for each pair of fence sitters       
+        scores = list()
+        for oid_a, tree_a in trees_a.items():
+            for oid_b, tree_b in trees_b.items():
+                if (tree_a[SHAPE].touches(tree_b[SHAPE])):
+                    # Calculate the score (shared fence to total area ratio) and append it to the list
+                    score = tree_a[SHAPE].intersect(tree_b[SHAPE],2).length / (tree_a[SHAPE].area + tree_b[SHAPE].area)
+                    if score > 0:
+                        scores.append([oid_a, oid_b, score])
+        scores = sorted(scores, key=lambda x: x[2], reverse=True)
+        
+        #######################################################################        
+        # From the scores, figure out which polygons to join and which to delete
+        union_polygons = dict()
+        delete_polygons = set()
+        for score in scores: 
+            oid_a = score[0]
+            oid_b = score[1]
+            if ( (oid_a not in union_polygons.keys()) and (oid_b not in delete_polygons) ):
+                union_polygons[oid_a] = oid_b
+                delete_polygons.add(oid_b)
     
-    ####################################################################### 
-    # Create a "scorecard" for each pair of fence sitters       
-    scores = list()
-    for oid_a, tree_a in trees_a.items():
-        for oid_b, tree_b in trees_b.items():
-            if (tree_a[SHAPE].touches(tree_b[SHAPE])):
-                # Calculate the score (shared fence to total area ratio) and append it to the list
-                score = tree_a[SHAPE].intersect(tree_b[SHAPE],2).length / (tree_a[SHAPE].area + tree_b[SHAPE].area)
-                if score > 0:
-                    scores.append([oid_a, oid_b, score])
-    scores = sorted(scores, key=lambda x: x[2], reverse=True)
-    
-    #######################################################################        
-    # From the scores, figure out which polygons to join and which to delete
-    union_polygons = dict()
-    delete_polygons = set()
-    for score in scores: 
-        oid_a = score[0]
-        oid_b = score[1]
-        if ( (oid_a not in union_polygons.keys()) and (oid_b not in delete_polygons) ):
-            union_polygons[oid_a] = oid_b
-            delete_polygons.add(oid_b)
-
-    #######################################################################        
-    # Update the shapefile. Replace the A side with the union, then delete the B side
-    with arcpy.da.UpdateCursor(fc, attr_list, query ,sr, False) as cursor:
+        #######################################################################        
+        # Update the shapefile. Replace the A side with the union, then delete the B side
+        cursor.reset()
         for attrs in cursor:
             # Check if the current tree needs to be joined or delted
             if (attrs[TileId] == tile_id_a) and (str(attrs[PolygonId]) in union_polygons.keys()):
@@ -138,8 +137,6 @@ def process_clumped_tile_pair (fc, clump_id, tile_pair, sr):
 #                print 'Deleted: ' + str(attrs[PolygonId])
     del cursor
     return;
-
-
 
 def get_clumped_tile_pairs (fc, sr):
     
