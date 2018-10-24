@@ -75,4 +75,20 @@ def step_header (step_count, step_total, message, inputs, outputs):
     log('--------------------------------------------------')
 
 
+def isOptimizable (fn):
+    desc = arcpy.Describe(fn)
+    return (desc.dataType == 'ShapeFile' or desc.dataType == 'Table' or desc.dataType == 'FeatureClass') and not desc.name.startswith('in_memory\\')
+        
 
+def move_to_in_memory (fn, temporary_assets):
+    if (isOptimizable(fn)):
+        log('Importing into in-memory shape file: ' + fn)
+        in_mem_file = 'in_memory\\' + arcpy.Describe(fn).baseName
+        if arcpy.Describe(fn).dataType == 'Table':
+            arcpy.CopyRows_management(fn, in_mem_file)
+        else:    
+            arcpy.CopyFeatures_management(fn, in_mem_file)
+        temporary_assets.append(in_mem_file)
+        return in_mem_file
+    else:
+        return fn

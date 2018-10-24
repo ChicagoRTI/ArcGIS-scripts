@@ -17,11 +17,10 @@ import math
 import common_functions
 common_functions.add_arcgis_to_sys_path()
 import arcpy
-import os
 
 
 _fc_mem = "in_memory\\fence_sitters"
-_use_fc_mem = False
+_use_fc_mem = True
 
 
 
@@ -175,46 +174,76 @@ def get_clumped_tile_pairs (fc, sr):
 
     return clumped_tile_pairs
 
-def merge (fc_input, fc_output):
-    sr = arcpy.Describe(fc_input).spatialReference
-    log (fc_input)
-    log (fc_output)
-    # Copy the input feature class to memory 
-    if _use_fc_mem:        
-        arcpy.env.workspace = "in_memory" 
-        if arcpy.Exists(_fc_mem):
-            arcpy.Delete_management(_fc_mem)    
-        arcpy.CopyFeatures_management(fc_input, _fc_mem)
-        fc = _fc_mem
-    else:
-        desc = arcpy.Describe(fc_input)
-        if desc.extension == '' :
-            arcpy.env.workspace = os.path.dirname(desc.path)
-        else:
-            arcpy.env.workspace = desc.path
-        fc = fc_input
-            
-    if arcpy.Exists(fc_output):
-        arcpy.Delete_management(fc_output)    
-    # Get the list of clumps along with the tile pairs in each
-    clumped_tile_pairs = get_clumped_tile_pairs (fc, sr)
-    
-    # Process the set of tile pairs in each clump
-    i=0
-    for clump, tile_pairs in clumped_tile_pairs.iteritems():
-        i += 1
-        if i % ((len(clumped_tile_pairs)/100)+1) == 0:
-            log ("Processing clump " + str(clump) + " (" + str(i) + " of " + str(len(clumped_tile_pairs)) + ")")
-        for tile_pair in tile_pairs:
-            process_clumped_tile_pair(fc, clump, tile_pair, sr)
-            
-    # Copy the in-memory feature class back to disk
-    log ("Writing results to " + fc_output)
+#def merge (fc_input, fc_output):
+#    sr = arcpy.Describe(fc_input).spatialReference
+#    log (fc_input)
+#    log (fc_output)
+#    # Copy the input feature class to memory 
+#    if _use_fc_mem:        
+#        arcpy.env.workspace = "in_memory" 
+#        if arcpy.Exists(_fc_mem):
+#            arcpy.Delete_management(_fc_mem)    
+#        arcpy.CopyFeatures_management(fc_input, _fc_mem)
+#        fc = _fc_mem
+#    else:
+#        desc = arcpy.Describe(fc_input)
+#        if desc.extension == '' :
+#            arcpy.env.workspace = os.path.dirname(desc.path)
+#        else:
+#            arcpy.env.workspace = desc.path
+#        fc = fc_input
+#            
+#    if arcpy.Exists(fc_output):
+#        arcpy.Delete_management(fc_output)    
+#    # Get the list of clumps along with the tile pairs in each
+#    clumped_tile_pairs = get_clumped_tile_pairs (fc, sr)
+#    
+#    # Process the set of tile pairs in each clump
+#    i=0
+#    for clump, tile_pairs in clumped_tile_pairs.iteritems():
+#        i += 1
+#        if i % ((len(clumped_tile_pairs)/100)+1) == 0:
+#            log ("Processing clump " + str(clump) + " (" + str(i) + " of " + str(len(clumped_tile_pairs)) + ")")
+#        for tile_pair in tile_pairs:
+#            process_clumped_tile_pair(fc, clump, tile_pair, sr)
+#            
+#    # Copy the in-memory feature class back to disk
+#    log ("Writing results to " + fc_output)
+#
+#    arcpy.CopyFeatures_management(fc, fc_output)
+#    if _use_fc_mem:        
+#        arcpy.Delete_management(_fc_mem)
 
-    arcpy.CopyFeatures_management(fc, fc_output)
-    if _use_fc_mem:        
-        arcpy.Delete_management(_fc_mem)
-        
+
+
+def merge (fc_input, fc_output):
+    arcpy.env.overwriteOutput = True
+    temporary_assets = list()
+    try:              
+        sr = arcpy.Describe(fc_input).spatialReference
+        # Copy the input feature class to memory if possible
+        if _use_fc_mem:
+            fc_input = common_functions.move_to_in_memory (fc_input, temporary_assets)                
+        # Get the list of clumps along with the tile pairs in each
+        clumped_tile_pairs = get_clumped_tile_pairs (fc_input, sr)        
+        # Process the set of tile pairs in each clump
+        i=0
+        for clump, tile_pairs in clumped_tile_pairs.iteritems():
+            i += 1
+            common_functions.log_progress("Processing clump " + str(clump), len(clumped_tile_pairs), i)
+            for tile_pair in tile_pairs:
+                process_clumped_tile_pair(fc_input, clump, tile_pair, sr)
+                
+        # Copy the in-memory feature class back to disk
+        log ("Writing results to " + fc_output)    
+        arcpy.CopyFeatures_management(fc_input, fc_output)
+
+    finally:
+        # Clean up    
+        for temporary_asset in temporary_assets:    
+            log('Deleting ' + temporary_asset)
+            arcpy.Delete_management(temporary_asset)
+        log("Done")
 
 
 

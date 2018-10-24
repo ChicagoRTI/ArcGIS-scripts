@@ -26,9 +26,9 @@ import arcpy
 def log (message):
     common_functions.log(message)
     
-def isOptimizable (fn):
-    desc = arcpy.Describe(fn)
-    return (desc.dataType == 'ShapeFile' or desc.dataType == 'Table' or desc.dataType == 'FeatureClass') and not desc.name.startswith('in_memory\\')
+#def isOptimizable (fn):
+#    desc = arcpy.Describe(fn)
+#    return (desc.dataType == 'ShapeFile' or desc.dataType == 'Table' or desc.dataType == 'FeatureClass') and not desc.name.startswith('in_memory\\')
 
     
 def import_if_text_file (in_file, temporary_assets) :
@@ -42,21 +42,21 @@ def import_if_text_file (in_file, temporary_assets) :
     else:
         return in_file
     
-def move_to_in_memory (in_file, temporary_assets):
-    if (isOptimizable(in_file)):
-        log('Importing into in-memory shape file: ' + in_file)
-        in_mem_file = 'in_memory\\' + arcpy.Describe(in_file).baseName
-        if arcpy.Describe(in_file).dataType == 'Table':
-            arcpy.CopyRows_management(in_file, in_mem_file)
-        else:    
-            arcpy.CopyFeatures_management(in_file, in_mem_file)
-        temporary_assets.append(in_mem_file)
-        return in_mem_file
-    else:
-        return in_file
+#def move_to_in_memory (in_file, temporary_assets):
+#    if (isOptimizable(in_file)):
+#        log('Importing into in-memory shape file: ' + in_file)
+#        in_mem_file = 'in_memory\\' + arcpy.Describe(in_file).baseName
+#        if arcpy.Describe(in_file).dataType == 'Table':
+#            arcpy.CopyRows_management(in_file, in_mem_file)
+#        else:    
+#            arcpy.CopyFeatures_management(in_file, in_mem_file)
+#        temporary_assets.append(in_mem_file)
+#        return in_mem_file
+#    else:
+#        return in_file
     
 def create_index (in_file, join_attr):
-    if (isOptimizable(in_file)):
+    if (common_functions.isOptimizable(in_file)):
         if join_attr not in [index.fields[0].name for index in arcpy.ListIndexes(in_file)]:
             log('Indexing attribute ' + join_attr + ' in ' + in_file)  
             arcpy.AddIndex_management(in_file, [join_attr], join_attr+'Idx', 'UNIQUE', 'ASCENDING')
@@ -71,8 +71,8 @@ def join(fn_left, fn_right, join_attr_left, join_attr_right, include_fields_righ
         fn_left = import_if_text_file (fn_left, temporary_assets)
         fn_right = import_if_text_file (fn_right, temporary_assets)
             
-        fn_left = move_to_in_memory (fn_left, temporary_assets)
-        fn_right = move_to_in_memory (fn_right, temporary_assets)
+        fn_left = common_functions.move_to_in_memory (fn_left, temporary_assets)
+        fn_right = common_functions.move_to_in_memory (fn_right, temporary_assets)
            
         log("Joining files")
         shp = arcpy.JoinField_management(fn_left, join_attr_left, fn_right, join_attr_right, include_fields_right)
