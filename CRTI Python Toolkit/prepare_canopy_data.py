@@ -27,6 +27,7 @@ import join_files
 TILE_ID_COLUMN_NAME = 'TileId'
 POLYGON_ID_COLUMN_NAME = 'PolygonId'
 CLUMP_ID_COLUMN_NAME = 'ClumpId'
+RASTER_COORDINATE_SYSTEM = 'WGS 1984'
 
 def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, start_step, scratch_workspace, output_fc):
     try:
@@ -108,8 +109,11 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, 
 
         if step_count >= step_start:
             common_functions.step_header (step_count, step_total, 'Merge NDVI rasters', [ndvi_raster_folder], [merged_ndvi_rasters])
-            arcpy.env.workspace = ndvi_raster_folder
-            arcpy.MosaicToNewRaster_management(arcpy.ListRasters('', ''), os.path.dirname(merged_ndvi_rasters), os.path.basename(merged_ndvi_rasters), '', '32_BIT_FLOAT', '', 1)
+#            arcpy.env.workspace = ndvi_raster_folder
+#            arcpy.MosaicToNewRaster_management(arcpy.ListRasters('', ''), os.path.dirname(merged_ndvi_rasters), os.path.basename(merged_ndvi_rasters), '', '32_BIT_FLOAT', '', 1)
+            arcpy.Delete_management(merged_ndvi_rasters)
+            arcpy.CreateMosaicDataset_management(os.path.dirname(merged_ndvi_rasters), os.path.basename(merged_ndvi_rasters), RASTER_COORDINATE_SYSTEM, 1, '32_BIT_FLOAT', 'NONE')
+            arcpy.AddRastersToMosaicDataset_management(merged_ndvi_rasters, 'Raster Dataset', ndvi_raster_folder, '', '', '', '', '', '', '', '*.tif', False, 'OVERWRITE_DUPLICATES')
         step_count += 1   
         
         if step_count >= step_start:
