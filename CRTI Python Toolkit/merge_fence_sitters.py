@@ -147,8 +147,8 @@ def get_clumped_tile_pairs (fc, sr):
     
     # Create a list of clumps, along with the tail pairs in each
     clumps = dict()
-    query = '("ClumpId" > 0)'     
- #   query = ''     
+#    query = '("ClumpId" > 0)'     
+    query = ''     
     # Read in all polygons that are in a clump (which implies they are fence sitters)       
     with arcpy.da.SearchCursor(fc, attr_list, query, sr, False) as cursor:
         for attrs in cursor:
