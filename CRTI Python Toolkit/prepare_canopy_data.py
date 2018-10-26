@@ -32,6 +32,7 @@ RASTER_COORDINATE_SYSTEM = 'WGS 1984'
 def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, start_step, scratch_workspace, output_fc):
     try:
         arcpy.env.overwriteOutput = True
+        arcpy.env.parallelProcessingFactor = "100%"
         arcpy.env.scratchWorkspace = os.path.normpath(scratch_workspace)
         arcpy.CheckOutExtension("Spatial")
     

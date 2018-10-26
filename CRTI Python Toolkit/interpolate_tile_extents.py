@@ -34,6 +34,7 @@ import common_functions
 common_functions.add_arcgis_to_sys_path()
 import arcpy
 import tile_file_names
+import math
 
 _lock_mp = multiprocessing.Lock()
 _threads = multiprocessing.cpu_count()
@@ -105,13 +106,13 @@ def main_process_fc_files (tile_file_names_table, tile_dim, fc_output_file):
         # and discovering the extent information, then reassemble the results into
         # a single dictionary object
         multiprocessing.set_executable(os.path.join(get_install_path(), 'pythonw.exe'))
-#        log('Executable path: ' + os.path.join(get_install_path(), 'pythonw.exe'))
         log('Launching ' + str(_threads) + ' worker processes')
         log('Logging multiprocess activity to ' + log_fn)
         name_lists = [ name_list[i::_threads] for i in xrange(_threads if _threads < len(name_list) else len(name_list)) ]
         p = multiprocessing.Pool(_threads)
         tile_dicts = p.map(partial(get_tile_extents_mp, log_file=log_fn), name_lists)
         p.close()
+        p.join()
         tiles = dict()
         for tile_dict in tile_dicts:
             tiles.update(tile_dict)
@@ -131,7 +132,7 @@ def main_process_fc_files (tile_file_names_table, tile_dim, fc_output_file):
             x_max_overall = max(x_max_overall, x_max)
             y_max_overall = max(y_max_overall, y_max)
 
-        # Find any tile that has a fence sitter on each side (height and width = 2500)
+        # Find any tile that has a fence sitter on each side (height and width = tile_dim)
         for reference_tile in tiles:
             x_min_reference, y_min_reference, x_max_reference, y_max_reference, width_reference, height_reference = tiles[reference_tile]
             if (width_reference == tile_dim and height_reference == tile_dim):
@@ -144,28 +145,9 @@ def main_process_fc_files (tile_file_names_table, tile_dim, fc_output_file):
         x_max_overall = adjust_boundary (x_max_reference, x_max_overall, 'up', tile_dim)
         y_max_overall = adjust_boundary (y_max_reference, y_max_overall, 'up', tile_dim)
         
-        # Draw the tile boundary lines in the output feature class      
-        arcpy.CreateFeatureclass_management(fc_output_path, fc_output_name, "POLYLINE", None, "DISABLED", "DISABLED", sr)
-
-        with  arcpy.da.InsertCursor(fc_output_file, ['SHAPE@']) as rows:
-            log ('Drawing vertical lines')
-            x = x_min_overall
-            while x <= x_max_overall:
-                p1 = arcpy.Point(x, y_min_overall)
-                p2 = arcpy.Point(x, y_max_overall)
-                line = [arcpy.Polyline(arcpy.Array([p1,p2]), sr)]
-                rows.insertRow(line)
-                x = x + tile_dim
-            
-            log ('Drawing horizontal lines')
-            y = y_min_overall
-            while y <= y_max_overall:
-                p1 = arcpy.Point(x_min_overall, y)
-                p2 = arcpy.Point(x_max_overall, y)
-                line = [arcpy.Polyline(arcpy.Array([p1,p2]), sr)]
-                rows.insertRow(line)
-                y = y + tile_dim            
-            del rows     
+        # Create the fish net mark the tile boundaries
+        arcpy.env.outputCoordinateSystem = sr
+        arcpy.CreateFishnet_management (fc_output_file, "%f %f" % (x_min_overall, y_min_overall), "%f %f" % (x_min_overall, y_max_overall), tile_dim, tile_dim, math.ceil((y_max_overall-y_min_overall)/tile_dim), math.ceil((x_max_overall-x_min_overall)/tile_dim))
         return 
  
 
