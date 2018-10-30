@@ -180,31 +180,26 @@ def merge (fc_input, fc_output):
     temporary_assets = list()
     try:              
         sr = arcpy.Describe(fc_input).spatialReference
-        # Create an index on the queried fields 
+        # Create indexes on the queried fields 
         common_functions.create_index (fc_input, ['TileId', 'ClumpId'], 'TileClumpIdx')  
         common_functions.create_index (fc_input, ['ClumpId'], 'ClumpIdx')  
 
-        #TEST
-        # Extract out just the fence sitters and create an in-memory feature class. This
-        # is done solely for performance reasons
-        log ("Reducing working set - separate out the fence sitters")
-        fence_sitters_layer = os.path.join(arcpy.env.scratchGDB, 'fence_sitters_layer')
-        non_fence_sitters_layer = os.path.join(arcpy.env.scratchGDB, 'non_fence_sitters_layer')
-        in_mem_fc = "in_memory\\merge_fence_sitters_fc"
-        arcpy.MakeFeatureLayer_management (fc_input, non_fence_sitters_layer, '"ClumpId" IS NULL')
-        arcpy.MakeFeatureLayer_management (fc_input, fence_sitters_layer, '"ClumpId" IS NOT NULL')
-        arcpy.CopyFeatures_management (fence_sitters_layer, in_mem_fc)
-        temporary_assets += [fence_sitters_layer, non_fence_sitters_layer, in_mem_fc]
-        fc_input = in_mem_fc
-              
-        # Copy the input feature class to memory if possible
-        if _use_fc_mem:
-            fc_input = common_functions.move_to_in_memory (fc_input, temporary_assets)
+        # Extract the non-fence sitters to reduce the working set. They are irrelevant to this step
+        log ("Reducing working set - copy non fence sitters to " + fc_output)
+        arcpy.FeatureClassToFeatureClass_conversion(fc_input, os.path.dirname(fc_output), os.path.basename(fc_output), '"ClumpId" IS NULL')
+
+        # Extract the fence sitters to an in-memory feature calss. This is done solely for performance reasons
+        fence_sitters_only = os.path.join('in_memory', 'fence_sitters_only')
+        log ("Reducing working set - copy fence sitters " + fence_sitters_only)
+        arcpy.FeatureClassToFeatureClass_conversion(fc_input, os.path.dirname(fence_sitters_only), os.path.basename(fence_sitters_only), '"ClumpId" IS NOT NULL')
+        temporary_assets += [fence_sitters_only]
+        fc_input = fence_sitters_only
+        
         # Get the list of clumps along with the tile pairs in each
         log ("Finding clumps")
         clumped_tile_pairs = get_clumped_tile_pairs (fc_input, sr)        
         # Process the set of tile pairs in each clump
-        log ("Ready to process clumps")
+        log ('Ready to process ' + str(len(clumped_tile_pairs)) + ' clumps')
         i=0
         for clump, tile_pairs in clumped_tile_pairs.iteritems():
             i += 1
@@ -212,14 +207,8 @@ def merge (fc_input, fc_output):
             for tile_pair in tile_pairs:
                 process_clumped_tile_pair(fc_input, clump, tile_pair, sr)
                 
-        log ("Copying non-fence sitters to output feature class " + fc_output)
-        arcpy.CopyFeatures_management(non_fence_sitters_layer, fc_output)
-        log ("Appending the fence sitters")
+        log ("Appending the merged fence sitters to " + fc_output)
         arcpy.Append_management(fc_input, fc_output)
-        
-
-        
-#        arcpy.CopyFeatures_management(fc_input, fc_output)
 
     finally:
         # Clean up    

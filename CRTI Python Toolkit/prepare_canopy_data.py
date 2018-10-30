@@ -41,6 +41,10 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, 
         step_start = int(start_step)
         step_count = 1
         step_total = 15
+        
+        input_tile_folder = os.path.normpath(input_tile_folder)
+        ndvi_raster_folder = os.path.normpath(ndvi_raster_folder)
+        output_fc = os.path.normpath(output_fc)
     
         tile_file_name_table = os.path.join(arcpy.env.scratchGDB, 'tile_file_names')
         merged_tiles_unclumped = os.path.join(arcpy.env.scratchGDB, 'merged_tiles_unclumped')
