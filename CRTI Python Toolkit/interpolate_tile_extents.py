@@ -144,31 +144,9 @@ def main_process_fc_files (tile_file_names_table, tile_dim, fc_output_file):
         y_max_overall = adjust_boundary (y_max_reference, y_max_overall, 'up', tile_dim)
         
         # Create the fish net mark the tile boundaries
-#        arcpy.env.outputCoordinateSystem = sr
-#        arcpy.CreateFishnet_management (fc_output_file, "%f %f" % (x_min_overall, y_min_overall), "%f %f" % (x_min_overall, y_max_overall), tile_dim, tile_dim, math.ceil((y_max_overall-y_min_overall)/tile_dim), math.ceil((x_max_overall-x_min_overall)/tile_dim))
-#        return 
-    
-            # Draw the tile boundary lines in the output feature class      
-        arcpy.CreateFeatureclass_management(fc_output_path, fc_output_name, "POLYLINE", None, "DISABLED", "DISABLED", sr)
-        with  arcpy.da.InsertCursor(fc_output_file, ['SHAPE@']) as rows:
-            log ('Drawing vertical lines')
-            x = x_min_overall
-            while x <= x_max_overall:
-                p1 = arcpy.Point(x, y_min_overall)
-                p2 = arcpy.Point(x, y_max_overall)
-                line = [arcpy.Polyline(arcpy.Array([p1,p2]), sr)]
-                rows.insertRow(line)
-                x = x + tile_dim
-            
-            log ('Drawing horizontal lines')
-            y = y_min_overall
-            while y <= y_max_overall:
-                p1 = arcpy.Point(x_min_overall, y)
-                p2 = arcpy.Point(x_max_overall, y)
-                line = [arcpy.Polyline(arcpy.Array([p1,p2]), sr)]
-                rows.insertRow(line)
-                y = y + tile_dim            
-            del rows  
+        arcpy.env.outputCoordinateSystem = sr
+        arcpy.CreateFishnet_management (fc_output_file, "%f %f" % (x_min_overall, y_min_overall), "%f %f" % (x_min_overall, y_max_overall), tile_dim, tile_dim, math.ceil((y_max_overall-y_min_overall)/tile_dim), math.ceil((x_max_overall-x_min_overall)/tile_dim))
+  
         return 
 
 if __name__ == '__main__':

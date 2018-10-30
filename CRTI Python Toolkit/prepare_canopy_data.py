@@ -58,7 +58,7 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, 
     
         
         if step_count >= step_start:
-            common_functions.step_header (step_count, step_total, 'Collecting tile file names', [input_tile_folder], [])
+            common_functions.step_header (step_count, step_total, 'Collecting tile file names', [input_tile_folder], [tile_file_name_table])
             tile_file_names.create_table(input_tile_folder, tile_file_name_table)
         step_count += 1       
     
@@ -114,8 +114,6 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, 
 
         if step_count >= step_start:
             common_functions.step_header (step_count, step_total, 'Merge NDVI rasters', [ndvi_raster_folder], [merged_ndvi_rasters])
-#            arcpy.env.workspace = ndvi_raster_folder
-#            arcpy.MosaicToNewRaster_management(arcpy.ListRasters('', ''), os.path.dirname(merged_ndvi_rasters), os.path.basename(merged_ndvi_rasters), '', '32_BIT_FLOAT', '', 1)
             arcpy.Delete_management(merged_ndvi_rasters)
             arcpy.CreateMosaicDataset_management(os.path.dirname(merged_ndvi_rasters), os.path.basename(merged_ndvi_rasters), RASTER_COORDINATE_SYSTEM, 1, '32_BIT_FLOAT', 'NONE')
             arcpy.AddRastersToMosaicDataset_management(merged_ndvi_rasters, 'Raster Dataset', ndvi_raster_folder, '', '', '', '', '', '', '', '*.tif', False, 'OVERWRITE_DUPLICATES')
