@@ -190,7 +190,7 @@ def merge (fc_input, fc_output):
 
         # Extract the fence sitters to an in-memory feature calss. This is done solely for performance reasons
         fence_sitters_only = os.path.join('in_memory', 'fence_sitters_only')
-        log ("Reducing working set - copy fence sitters " + fence_sitters_only)
+        log ("Reducing working set - copy fence sitters to " + fence_sitters_only)
         arcpy.FeatureClassToFeatureClass_conversion(fc_input, os.path.dirname(fence_sitters_only), os.path.basename(fence_sitters_only), '"ClumpId" IS NOT NULL')
         temporary_assets += [fence_sitters_only]
         fc_input = fence_sitters_only

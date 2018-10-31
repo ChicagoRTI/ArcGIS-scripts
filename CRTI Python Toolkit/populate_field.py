@@ -21,9 +21,12 @@ def log (message):
     common_functions.log(message)
     
 def populate_fc (fc, field_name, field_value, field_type):
-    # Add the field if it does not already exist
-    if len(arcpy.ListFields(fc, field_name)) == 0 :
-            arcpy.AddField_management(fc, field_name, field_type)
+    # Delete the field in case it alreay exists then re-add it
+    arcpy.DeleteField_management(fc, field_name)
+    arcpy.AddField_management(fc, field_name, field_type)
+
+#    if len(arcpy.ListFields(fc, field_name)) == 0 :
+#            arcpy.AddField_management(fc, field_name, field_type)
     # Figure out what the field value should be set to 
     fc_name = arcpy.Describe(fc).baseName
     with arcpy.da.UpdateCursor(fc, [field_name]) as cursor: 
@@ -103,4 +106,4 @@ def populate (tuple_list):
             
 
 if __name__ == '__main__':
-     populate(sys.argv[1])
+     populate([tuple(sys.argv[1].split(','))])
