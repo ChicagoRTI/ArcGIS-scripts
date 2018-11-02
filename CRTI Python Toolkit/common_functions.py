@@ -69,7 +69,7 @@ def step_header (step_count, step_total, message, inputs, outputs):
     log('')
     for m in inputs:
         if arcpy.Exists(m) and (arcpy.Describe(m).dataType == 'ShapeFile' or arcpy.Describe(m).dataType == 'Table' or arcpy.Describe(m).dataType == 'FeatureClass'):
-            m += '(' + str(arcpy.GetCount_management(m)) + ' records)'
+            m += ' (' + str(arcpy.GetCount_management(m)) + ' records)'
         log('Input : ' + m)
     for m in outputs:
         log('Output: ' + m)
