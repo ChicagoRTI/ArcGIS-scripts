@@ -20,14 +20,29 @@ _threads = multiprocessing.cpu_count()
 def log (message):
     common_functions.log(message)
     
-def populate_fc (fc, field_name, field_value, field_type):
-    # Delete the field in case it alreay exists then re-add it
-    arcpy.DeleteField_management(fc, field_name)
-    arcpy.AddField_management(fc, field_name, field_type)
 
-#    if len(arcpy.ListFields(fc, field_name)) == 0 :
-#            arcpy.AddField_management(fc, field_name, field_type)
-    # Figure out what the field value should be set to 
+
+def get_field_action (fc, field_name, field_type):
+    if len(arcpy.ListFields(fc, field_name)) == 0:
+        return "Add"
+    field = arcpy.ListFields(fc, field_name)[0]
+    if field.type == field_type:
+        return "Reuse"
+    else:
+        return "DeleteAdd"
+        
+
+    
+def populate_fc (fc, field_name, field_value, field_type):
+    
+    # Prepare the field to be updated
+    field_action = get_field_action (fc, field_name, field_type)
+    if field_action == "DeleteAdd":
+        arcpy.DeleteField_management(fc, field_name)
+    if field_action == "Add" or field_action == "DeleteAdd":
+        arcpy.AddField_management(fc, field_name, field_type)
+        
+    # Update the field
     fc_name = arcpy.Describe(fc).baseName
     with arcpy.da.UpdateCursor(fc, [field_name]) as cursor: 
         row_count = 1                
@@ -85,24 +100,6 @@ def populate (tuple_list):
             common_functions.log_progress ('Populating ' + field_name + ' with ' + str(field_value) + ' in ' + fc,  len(tuple_list), fc_count)    
             populate_fc (fc, field_name, field_value, field_type)    
             fc_count = fc_count+1
-
-            
-#    if len(fcs) > sys.maxint and field_value != 'UNIQUE_ID':  # turn off mp support due to ESRI bug
-#        # Use multiprocessing support to do the work
-#        log_mp_fn = os.path.join(arcpy.env.scratchFolder, 'log_mp.txt')
-#        multiprocessing.set_executable(os.path.join(common_functions.get_install_path(), 'pythonw.exe'))
-#        log('Launching ' + str(_threads) + ' worker processes')
-#        log('Logging multiprocess activity to ' + log_mp_fn)
-#        shps_lists = [ fcs[i::_threads] for i in xrange(_threads if _threads < len(fcs) else len(fcs)) ]
-#        p = multiprocessing.Pool(_threads)
-#        p.map(partial(populate_mp, field_name=field_name, field_value=field_value, log_file=log_mp_fn), shps_lists)
-#        p.close()
-#    else:
-#        fc_count = 1
-#        for fc in fcs:
-#            common_functions.log_progress ('Populating ' + field_name + ' with ' + field_value + ' in ' + fc, len(fcs), fc_count)    
-#            populate_fc (fc, field_name, field_value)    
-#            fc_count = fc_count+1
             
 
 if __name__ == '__main__':

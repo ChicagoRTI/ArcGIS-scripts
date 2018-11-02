@@ -9,15 +9,20 @@ Created on Tue Mar 20 11:07:22 2018
 # To run from Spyder iPython console:
 #   runfile('D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit/compute_zonal_stats.py', wdir='D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit', args="'C:\Users\Don\Documents\ArcGIS\scratch.gdb\canopies_without_ndvi' 'PolygonId' 'C:\Users\Don\Documents\ArcGIS\scratch.gdb\merged_ndvi_rasters' 'D:\Temp\scratch.gdb\zonal_ndvi'")
 #
-
 # Make sure the ArcGIS components are in the system path (from C:\Program Files (x86)\ArcGIS\Desktop10.6\Support\Python/Desktop10.6.pth)
+#
+# NOTE:
+#  This custom code is required because ArcGIS can not handle feature sets with more
+#  then 170,000 records.  https://support.esri.com/en/technical-article/000012343
+#
+
 import sys
 import os
 import common_functions
 common_functions.add_arcgis_to_sys_path()
 import arcpy
 
-_CHUNK_SIZE = 150000
+_CHUNK_SIZE = 150000  # Documented limit is 170,000 
 
 
 def log (message):

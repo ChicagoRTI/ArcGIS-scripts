@@ -37,11 +37,12 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, 
         arcpy.env.scratchWorkspace = os.path.normpath(scratch_workspace)
         arcpy.CheckOutExtension("Spatial")
     
-        common_functions.log("Logging to " + arcpy.env.scratchFolder)
-    
         step_start = int(start_step)
         step_count = 1
         step_total = 15
+
+        common_functions.log("Logging to " + arcpy.env.scratchFolder)
+        common_functions.step_header (0, step_total, 'Input parameters', [input_tile_folder, tile_dimension, ndvi_raster_folder, start_step, scratch_workspace, output_fc], [])
         
         input_tile_folder = os.path.normpath(input_tile_folder)
         ndvi_raster_folder = os.path.normpath(ndvi_raster_folder)
@@ -56,8 +57,7 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, 
         merged_ndvi_rasters = os.path.join(arcpy.env.scratchGDB, 'merged_ndvi_rasters')
         canopies_without_ndvi = os.path.join(arcpy.env.scratchGDB, 'canopies_without_ndvi')       
         zonal_ndvi = os.path.join(arcpy.env.scratchGDB, 'zonal_ndvi')
-    
-        
+            
         if step_count >= step_start:
             common_functions.step_header (step_count, step_total, 'Collecting tile file names', [input_tile_folder], [tile_file_name_table])
             tile_file_names.create_table(input_tile_folder, tile_file_name_table)
