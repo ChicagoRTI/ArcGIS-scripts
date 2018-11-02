@@ -19,7 +19,6 @@ import tile_file_names
 
 _CHUNK_SIZE = 1000
 
-test = 0
 
 def log (message):
     common_functions.log(message)
@@ -27,35 +26,19 @@ def log (message):
 
 
 def merge_one_chunk (fns, sr, fc_output):
-    temporary_assets = list()
+    in_mem_tile_fc = os.path.join('in_memory', 'tile')
     try:
-        in_mem_tile_fc = os.path.join('in_memory', 'tile')
-        temporary_assets += [in_mem_tile_fc]
-
+        # Create an in-memory feature class to accumulate the chunk
         arcpy.CreateFeatureclass_management(os.path.dirname(in_mem_tile_fc), os.path.basename(in_mem_tile_fc), "POLYGON", fns[0], '','', sr)
-        
-        if test == 0:
-            # APPEND
-            for fn in fns:
-                arcpy.Append_management(fn, in_mem_tile_fc)
-        
-        if test == 1:
-            # UPDATE CURSOR
-            with arcpy.da.InsertCursor(in_mem_tile_fc, '*') as insert_cursor:
-                # Loop through each of the tiles and append them to the output feature class
-                for fn in fns:
-                    with arcpy.da.SearchCursor(fn, '*', '', sr, False) as read_cursor:
-                        for attrs in read_cursor:
-                            insert_cursor.insertRow(attrs)
-                    del read_cursor
-            del insert_cursor
-
+        # Aggregate all tiles in the chunk        
+        for fn in fns:
+            arcpy.Append_management(fn, in_mem_tile_fc)
+        # Append the chunk to the output feature class
         arcpy.Append_management(in_mem_tile_fc, fc_output)
             
     finally:
         # Clean up    
-        for temporary_asset in temporary_assets:    
-            arcpy.Delete_management(temporary_asset)
+        arcpy.Delete_management(in_mem_tile_fc)
 
 
 
