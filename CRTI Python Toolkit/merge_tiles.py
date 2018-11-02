@@ -35,7 +35,8 @@ def merge (tile_file_names_table, fc_output):
         # Get the spatial reference from the first tile
         sr = arcpy.Describe(fn_first).spatialReference
         # Copy the first tile to seed the output feature class
-        arcpy.FeatureClassToFeatureClass_conversion(fn_first, os.path.dirname(fc_output), os.path.basename(fc_output), '')
+#        arcpy.FeatureClassToFeatureClass_conversion(fn_first, os.path.dirname(fc_output), os.path.basename(fc_output), '')
+        arcpy.CopyFeatures_management(fn_first, fc_output)
 
         in_mem_tile_fc = os.path.join('in_memory', 'tile')
         in_mem_fc_output = os.path.join('in_memory', 'fc_output')

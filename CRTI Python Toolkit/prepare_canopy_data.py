@@ -23,6 +23,7 @@ import merge_fence_sitters
 import fix_file_names
 import tile_file_names
 import join_files
+import compute_zonal_stats
 
 TILE_ID_COLUMN_NAME = 'TileId'
 POLYGON_ID_COLUMN_NAME = 'PolygonId'
@@ -120,8 +121,10 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, 
         step_count += 1   
         
         if step_count >= step_start:
-            common_functions.step_header (step_count, step_total, 'Computing NDVI zonal statistics', [canopies_without_ndvi, merged_ndvi_rasters], [zonal_ndvi])
-            arcpy.sa.ZonalStatisticsAsTable(canopies_without_ndvi, POLYGON_ID_COLUMN_NAME, merged_ndvi_rasters, zonal_ndvi)
+            common_functions.step_header (step_count, step_total, 'Computing NDVI zonal statistics', [canopies_without_ndvi, merged_ndvi_rasters], [zonal_ndvi])           
+#            arcpy.sa.ZonalStatisticsAsTable(canopies_without_ndvi, POLYGON_ID_COLUMN_NAME, merged_ndvi_rasters, zonal_ndvi)
+            compute_zonal_stats.compute(canopies_without_ndvi, POLYGON_ID_COLUMN_NAME, merged_ndvi_rasters, zonal_ndvi)
+            compute_zonal_stats
         step_count += 1       
     
         if step_count >= step_start:
