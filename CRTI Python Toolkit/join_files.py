@@ -49,8 +49,8 @@ def join(fn_left, fn_right, join_attr_left, join_attr_right, include_fields_righ
         fn_left = import_if_text_file (fn_left, temporary_assets)
         fn_right = import_if_text_file (fn_right, temporary_assets)
             
-        fn_left = common_functions.move_to_in_memory (fn_left, temporary_assets)
-        fn_right = common_functions.move_to_in_memory (fn_right, temporary_assets)
+#        fn_left = common_functions.move_to_in_memory (fn_left, temporary_assets)
+#        fn_right = common_functions.move_to_in_memory (fn_right, temporary_assets)
            
         log("Joining files")
         shp = arcpy.JoinField_management(fn_left, join_attr_left, fn_right, join_attr_right, include_fields_right)
