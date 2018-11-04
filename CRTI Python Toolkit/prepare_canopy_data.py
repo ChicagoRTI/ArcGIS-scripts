@@ -56,8 +56,8 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, 
         fence_sitter_clumps_dissolved = os.path.join(arcpy.env.scratchGDB, 'fence_sitter_clumps_dissolved')
         merged_tiles_clumped = os.path.join(arcpy.env.scratchGDB, 'merged_tiles_clumped')
         merged_ndvi_rasters = os.path.join(arcpy.env.scratchGDB, 'merged_ndvi_rasters')
-        canopies_without_ndvi = os.path.join(arcpy.env.scratchGDB, 'canopies_without_ndvi')       
         zonal_ndvi = os.path.join(arcpy.env.scratchGDB, 'zonal_ndvi')
+        canopies_without_ndvi = output_fc      
             
         if step_count >= step_start:
             common_functions.step_header (step_count, step_total, 'Collecting tile file names', [input_tile_folder], [tile_file_name_table])
@@ -129,7 +129,7 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, 
     
         if step_count >= step_start:
             common_functions.step_header (step_count, step_total, 'Appending NDVI statistics', [canopies_without_ndvi, zonal_ndvi], [output_fc])
-            join_files.join(canopies_without_ndvi, zonal_ndvi, POLYGON_ID_COLUMN_NAME, POLYGON_ID_COLUMN_NAME, '', output_fc)
+            join_files.join(canopies_without_ndvi, POLYGON_ID_COLUMN_NAME, zonal_ndvi, POLYGON_ID_COLUMN_NAME, 'MAX;MEAN;STD')
         step_count += 1       
         
         if step_count >= step_start:

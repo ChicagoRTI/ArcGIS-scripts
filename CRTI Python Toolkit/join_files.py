@@ -1,21 +1,6 @@
-# -*- coding: utf-8 -*-
-
 # To run from Spyder iPython console:
-#runfile('D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit/join_files.py', args="\
-#'D:/CRTI/GIS data/Dupage_with_NDVI/DuPage_crowns_intersecting_TreeInventory.shp' \
-#'D:/CRTI/GIS data/Dupage_with_NDVI/csvs\DuPage_NDVI_tree_polys_nearInvTrees.csv' \
-#'TreeNum' \
-#'TreeNum' \
-#'NDVI_MEAN;NDVI_MAX;NDVI_STD' \
-#'D:/temp/shp_test/join.shp' \
-#")
- 
-
+#   runfile('D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit/join_files.py', wdir='D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit', args="'C:\Users\Don\Documents\ArcGIS\scratch.gdb\canopies_without_ndvi' 'PolygonId' 'C:\Users\Don\Documents\ArcGIS\scratch.gdb\zonal_ndvi' 'PolygonId' 'MAX;MEAN;STD'")
 #
-# When using using fn_left_mem instead of fn_left in the join, the time went from 
-# 189 minutes to under 2 minutes
-#
-
 
 
 import sys
@@ -25,49 +10,75 @@ import arcpy
 
 def log (message):
     common_functions.log(message)
+    return
+
+# Define generator for join data
+def joindataGen(joinTable,fieldList,sortField):
+    with arcpy.da.SearchCursor(joinTable,fieldList,sql_clause=['DISTINCT', 'ORDER BY ' + sortField]) as cursor:
+        for row in cursor:
+            yield row
+
+# Function for progress reporting
+def percentile(n,pct):
+    return int(float(n)*float(pct)/100.0)
+
+def join (inTable, inJoinField, joinTable, outJoinField, joinFields):
+    log('Join left side: ' + inTable)
+    log('Join right side: ' + joinTable)
+    log('Join keys: ' + str(inJoinField) + ':' + str(outJoinField))
     
+    common_functions.create_index (inTable, [inJoinField], 'LeftIdx')
+    common_functions.create_index (joinTable, [outJoinField], 'RightIdx')
 
     
-def import_if_text_file (in_file, temporary_assets) :
-    in_file_desc = arcpy.Describe(in_file)
-    if in_file_desc.dataType == 'TextFile':
-        log('Importing into in-memory geodatabase table:  ' + in_file)
-        in_mem_file = 'in_memory\\' + in_file_desc.baseName
-        arcpy.CopyRows_management(in_file, in_mem_file)
-        temporary_assets.append(in_mem_file)
-        return in_mem_file
-    else:
-        return in_file
-                                  
+    # Add join fields
+#    log('\nAdding join fields...')
+    fList = [f for f in arcpy.ListFields(joinTable) if f.name in joinFields.split(';')]
+    for i in range(len(fList)):
+        name = fList[i].name
+        type = fList[i].type
+        if type in ['Integer','OID']:
+            arcpy.AddField_management(inTable,name,field_type='LONG')
+        elif type == 'String':
+            arcpy.AddField_management(inTable,name,field_type='TEXT',field_length=fList[i].length)
+        elif type == 'Double':
+            arcpy.AddField_management(inTable,name,field_type='DOUBLE')
+        elif type == 'Date':
+            arcpy.AddField_management(inTable,name,field_type='DATE')
+        else:
+            arcpy.AddError('\nUnknown field type: {0} for field: {1}'.format(type,name))
     
-def join(fn_left, fn_right, join_attr_left, join_attr_right, include_fields_right, shp_out):
-    temporary_assets = list()
-    try:              
-        common_functions.create_index (fn_left, [join_attr_left], 'LeftIdx')
-        common_functions.create_index (fn_right, [join_attr_right], 'RightIdx')
-        
-        fn_left = import_if_text_file (fn_left, temporary_assets)
-        fn_right = import_if_text_file (fn_right, temporary_assets)
-            
-#        fn_left = common_functions.move_to_in_memory (fn_left, temporary_assets)
-#        fn_right = common_functions.move_to_in_memory (fn_right, temporary_assets)
-           
-        log("Joining files")
-        shp = arcpy.JoinField_management(fn_left, join_attr_left, fn_right, join_attr_right, include_fields_right)
-        
-        log("Copying results to persistent shape file: " + shp_out)
-        arcpy.Delete_management(shp_out)  
-        arcpy.CopyFeatures_management(shp, shp_out)
-    except Exception as e:
-        log("Exception: " + str(e))
-        arcpy.AddError(str(e))
-        raise
-    finally:
-        # Clean up    
-        for temporary_asset in temporary_assets:    
-            log('Deleting ' + temporary_asset)
-            arcpy.Delete_management(temporary_asset)
-        log("Done")
+    # Write values to join fields
+    fieldList = [outJoinField] + joinFields.split(';')
+    joinDataGen = joindataGen(joinTable,fieldList,outJoinField)
+    joinTuple = joinDataGen.next()
+    
+    # 
+    fieldList = [inJoinField] + joinFields.split(';')
+    count = int(arcpy.GetCount_management(inTable).getOutput(0))
+    j = 0
+    with arcpy.da.UpdateCursor(inTable,fieldList,sql_clause=(None,'ORDER BY '+inJoinField)) as cursor:
+        for row in cursor:
+            j+=1
+            common_functions.log_progress("Joining record ", count, j)
+            row = list(row)
+            key = row[0]
+            try:
+                while joinTuple[0] < key:
+                    joinTuple = joinDataGen.next()
+                if key == joinTuple[0]:
+                    for i in range(len(joinTuple))[1:]:
+                        row[i] = joinTuple[i]
+                    row = tuple(row)
+                    cursor.updateRow(row)
+            except StopIteration:
+                arcpy.AddWarning('\nEnd of join table.')
+                break
+    
+    arcpy.SetParameter(5,inTable)
+    log('\nDone.')
+
+
 
 if __name__ == '__main__':
-     join(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5], sys.argv[6])
+     join(sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5])
