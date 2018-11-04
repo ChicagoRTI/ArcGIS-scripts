@@ -45,8 +45,9 @@ def log_mp (log_file, message):
     log_file = open(log_file, "a+", 0)
     log_file.write(message + '\n')
     log_file.close()
-    print (message)
-    sys.stdout.flush()
+    if r'\ArcGIS' not in sys.executable:
+        print (message)
+        sys.stdout.flush()
     arcpy.AddMessage(message)
 
 def log_progress (message, max_range, step_count):
@@ -54,7 +55,7 @@ def log_progress (message, max_range, step_count):
         log (message + ' (' + str(step_count) + ' of ' + str(max_range) + ')')
 
 def log_progress_mp (log_file, message, max_range, step_count):
-    if step_count % ((max_range/(100/_threads))+1) == 0:
+    if step_count % (((max_range*_threads)/100)+1) == 0:
         log_mp (log_file, message + ' (' + str(step_count) + ' of ' + str(max_range) + ')')
 
     
