@@ -76,7 +76,6 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, 
         
         if step_count >= step_start:
             common_functions.step_header (step_count, step_total, 'Merging tiles into a single feature class', [tile_file_name_table], [merged_tiles_unclumped])
-            #arcpy.Merge_management(tile_file_names.read_file_names(tile_file_name_table), merged_tiles_unclumped)
             merge_tiles.merge(tile_file_name_table, merged_tiles_unclumped)
         step_count += 1       
         
@@ -124,7 +123,6 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, 
         
         if step_count >= step_start:
             common_functions.step_header (step_count, step_total, 'Computing NDVI zonal statistics', [canopies_without_ndvi, merged_ndvi_rasters], [zonal_ndvi])           
-#            arcpy.sa.ZonalStatisticsAsTable(canopies_without_ndvi, POLYGON_ID_COLUMN_NAME, merged_ndvi_rasters, zonal_ndvi)
             compute_zonal_stats.compute(canopies_without_ndvi, POLYGON_ID_COLUMN_NAME, merged_ndvi_rasters, zonal_ndvi)
             compute_zonal_stats
         step_count += 1       

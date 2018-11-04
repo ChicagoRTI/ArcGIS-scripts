@@ -21,6 +21,8 @@ add_arcgis_to_sys_path()
 
 import arcpy
 
+log_mp_fn = os.path.join(arcpy.env.scratchFolder, 'log_mp.txt')
+
 def log (message):
     message = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + ": " + str(os.getpid()) + ": " + message
     # Log to a file in the scratch folder
@@ -43,8 +45,8 @@ def log_mp (log_file, message):
     log_file = open(log_file, "a+", 0)
     log_file.write(message + '\n')
     log_file.close()
- #   print (message)
- #   sys.stdout.flush()
+    print (message)
+    sys.stdout.flush()
     arcpy.AddMessage(message)
 
 def log_progress (message, max_range, step_count):
