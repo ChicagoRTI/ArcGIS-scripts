@@ -6,6 +6,7 @@ import time
 import os
 import sys
 import multiprocessing
+import gc
 
 _threads = multiprocessing.cpu_count()
 
@@ -77,6 +78,7 @@ def step_header (step_count, step_total, message, inputs, outputs):
     for m in outputs:
         log('Output: ' + m)
     log('--------------------------------------------------')
+    gc.collect()
 
 
 def isOptimizable (fn):

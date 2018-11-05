@@ -41,15 +41,14 @@ def compute (fc_input, zone_field, rasters, fc_output):
         # Delete the output feature set
         arcpy.Delete_management(fc_output)
 
-        # Get all of the polygon IDs
+        # Get a sorted list of all of the polygon IDs
         p_ids = list()
-        with arcpy.da.SearchCursor(fc_input, [zone_field], '','', False) as cursor:
+        with arcpy.da.SearchCursor(fc_input, [zone_field], '','', False, sql_clause=['DISTINCT', 'ORDER BY ' + zone_field + ' ASC']) as cursor:
             for attrs in cursor:
                 p_ids.append(attrs[0])
         del cursor
         
-        # Sort the list and chunk it up
-        p_ids.sort()
+        # Chunk it up
         p_ids_list = [p_ids[i:i+_CHUNK_SIZE] for i in range(0, len(p_ids), _CHUNK_SIZE)] 
         
         fc_in_int = os.path.join('in_memory', 'fc_int')
