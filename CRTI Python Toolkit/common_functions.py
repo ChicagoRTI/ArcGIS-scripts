@@ -77,8 +77,8 @@ def step_header (step_count, step_total, message, inputs, outputs):
         log('Input : ' + m)
     for m in outputs:
         log('Output: ' + m)
+    log('GC: uncollectable=' + str(len(gc.garbage)) + ' objects=' + str(len(gc.get_objects())))
     log('--------------------------------------------------')
-    gc.collect()
 
 
 def isOptimizable (fn):
