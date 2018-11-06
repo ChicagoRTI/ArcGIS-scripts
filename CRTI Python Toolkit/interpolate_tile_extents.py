@@ -64,7 +64,8 @@ def get_tile_extents_mp (name_list, log_file):
     except Exception as e:
         common_functions.log_mp(log_file, "Exception: " + str(e))
         common_functions.log_mp(log_file, traceback.format_exc())
-        return
+        raise
+    return
 
 
 def adjust_boundary (reference, boundary, direction, step):

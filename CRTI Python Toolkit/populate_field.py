@@ -4,7 +4,6 @@
 import sys
 import os
 import multiprocessing
-from functools import partial
 import traceback
 import common_functions
 common_functions.add_arcgis_to_sys_path()
@@ -58,7 +57,7 @@ def populate_fc (fc, field_name, field_value, field_type):
     del cursor
 
 
-def populate_mp (tuple_list, log_file):
+def populate_mp (tuple_list):
     try:
         # Add a new attribute to all of the shape files, then populate it with the shape file name
         fc_count = 1
@@ -67,20 +66,20 @@ def populate_mp (tuple_list, log_file):
             field_name = tuple_[_FIELD_NAME]
             field_value = tuple_[_FIELD_VALUE]
             field_type = tuple_[_FIELD_TYPE]
-            common_functions.log_progress_mp (log_file, 'Populating ' + field_name + ' with ' + str(field_value) + ' in ' + fc, len(tuple_list), fc_count)    
+            common_functions.log_progress_mp (common_functions.log_mp_fn, 'Populating ' + field_name + ' with ' + str(field_value) + ' in ' + os.path.basename(fc), len(tuple_list), fc_count)    
             populate_fc (fc, field_name, field_value, field_type)    
             fc_count = fc_count+1
     except Exception as e:
-        common_functions.log_mp(log_file, "Exception: " + str(e))
-        common_functions.log_mp(log_file, traceback.format_exc())
+        common_functions.log_mp(common_functions.log_mp_fn, "Exception: " + str(e))
+        common_functions.log_mp(common_functions.log_mp_fn, traceback.format_exc())
         arcpy.AddError(str(e))
         raise  
 
 # Takes a list of tuples <feature_class, field_value, field_name, field_type>    
 def populate (tuple_list):
     
-    if len(tuple_list) > sys.maxint and 'UNIQUE_ID' not in [i[_FIELD_VALUE] for i in tuple_list]:  # turn off mp support due to ESRI bug
-  #  if len(tuple_list) > 1 and 'UNIQUE_ID' not in [i[_FIELD_VALUE] for i in tuple_list]:  # turn off mp support due to ESRI bug
+   # if len(tuple_list) > sys.maxint and 'UNIQUE_ID' not in [i[_FIELD_VALUE] for i in tuple_list]:  # turn off mp support due to ESRI bug
+    if len(tuple_list) > 1 and 'UNIQUE_ID' not in [i[_FIELD_VALUE] for i in tuple_list]:  # turn off mp support due to ESRI bug
         # Use multiprocessing support to do the work
         log_mp_fn = os.path.join(arcpy.env.scratchFolder, 'log_mp.txt')
         multiprocessing.set_executable(os.path.join(common_functions.get_install_path(), 'pythonw.exe'))
@@ -88,7 +87,7 @@ def populate (tuple_list):
         log('Logging multiprocess activity to ' + log_mp_fn)
         tuple_lists = [ tuple_list[i::_threads] for i in xrange(_threads if _threads < len(tuple_list) else len(tuple_list)) ]
         p = multiprocessing.Pool(_threads)
-        p.map(partial(populate_mp, log_file=log_mp_fn), tuple_lists)
+        p.map(populate_mp, tuple_lists)
         p.close()
     else:
         fc_count = 1
