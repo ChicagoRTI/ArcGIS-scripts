@@ -29,20 +29,23 @@ def log (message):
     common_functions.log(message)
     return
 
-def get_pid_chunks (fc, zone_field):
-    # Get a sorted list of all of the polygon IDs
-    p_ids = [0] * int(arcpy.GetCount_management(fc).getOutput(0))
+def get_zone_val_chunks (fc, zone_field):
+    # Get a sorted list of all of the zone field values. Note that this could be done as a list
+    # but it was generating out of memory errors when done that way
+    zone_vals = [0] * int(arcpy.GetCount_management(fc).getOutput(0))
     with arcpy.da.SearchCursor(fc, [zone_field], '','', False, sql_clause=['DISTINCT', 'ORDER BY ' + zone_field + ' ASC']) as cursor:
         i = 0
         for attrs in cursor:
-            p_ids[i] = attrs[0]
+            zone_vals[i] = attrs[0]
             i += 1
     del cursor
-    
-    # Chunk it up in to a list of tuples (chunk_min_p_id, chunk_max_pid)
-    p_ids_list = [p_ids[j:j+_CHUNK_SIZE] for j in range(0, len(p_ids), _CHUNK_SIZE)] 
-    p_id_chunks = [(p_id[0], p_id[len(p_id)-1]) for p_id in p_ids_list]
-    return p_id_chunks
+
+    # Create equal size chunks out of the list of values    
+    zone_vals_list = [zone_vals[j:j + _CHUNK_SIZE] for j in range(0, len(zone_vals), _CHUNK_SIZE)] 
+    # All we really need is the min and max value for each chunk. So to conserve memory create
+    # a list of tuples where each tuple represent those values  (chunk_min_zone_val, chunk_max_zone_val)
+    zone_val_chunks = [(zone_val[0], zone_val[len(zone_val)-1]) for zone_val in zone_vals_list]
+    return zone_val_chunks
     
 
 def compute (fc_input, zone_field, rasters, fc_output):
@@ -55,20 +58,21 @@ def compute (fc_input, zone_field, rasters, fc_output):
         # Delete the output feature set
         arcpy.Delete_management(fc_output)
         
-        # Get a list of polygon id ranges (chunks)
-        p_id_chunks = get_pid_chunks (fc_input, zone_field)
+        # Get a list of zone field value ranges (chunks). In addition to circumventing the documented
+        # 170000 record limitation, this also allows us to do the processing in memory
+        zone_val_chunks = get_zone_val_chunks (fc_input, zone_field)
 
+        # Prepare the in-memory feature classes
         fc_in_int = os.path.join('in_memory', 'fc_int')
         fc_out_int = os.path.join('in_memory', 'fc_out')
         temporary_assets += [fc_in_int, fc_out_int]
         
         i=0
-        for p_id_chunk in p_id_chunks:
+        for zone_val_min, zone_val_max in zone_val_chunks:
             i += 1
-            common_functions.log_progress("Processing segment", len(p_id_chunks), i)
+            common_functions.log_progress("Processing segment", len(zone_val_chunks), i)
             # Create a feature class for this chunk
-            p_id_min, p_id_max = p_id_chunk
-            where_clause = """{0} >= {1} AND {2} <= {3}""".format(arcpy.AddFieldDelimiters(fc_in_int, zone_field), p_id_min,arcpy.AddFieldDelimiters(fc_in_int, zone_field), p_id_max)
+            where_clause = '("' + zone_field + '">=' + str(zone_val_min) + " AND " + '"' + zone_field + '"<=' + str(zone_val_max) + ')'            
             arcpy.FeatureClassToFeatureClass_conversion(fc_input, os.path.dirname(fc_in_int), os.path.basename(fc_in_int), where_clause)    
             # Compute the zonal stats for this chunk
             arcpy.sa.ZonalStatisticsAsTable(fc_in_int, zone_field, rasters, fc_out_int)
