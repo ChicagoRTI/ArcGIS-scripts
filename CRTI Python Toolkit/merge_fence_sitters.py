@@ -42,9 +42,10 @@ def weighted_mean (measure_1, weight_1, measure_2, weight_2):
 def process_clumps_mp (tuple):
     try:
         # Unpack the input tuple
-        fc_input, fc_output, clumped_tile_pairs, min_clump_id, max_clump_id = tuple
+        fc_input, fc_output, clumped_tile_pairs, min_clump_id, max_clump_id, scratch_ws = tuple
         
         arcpy.env.overwriteOutput = True
+        arcpy.env.scratchWorkspace = scratch_ws
         sr = arcpy.Describe(fc_input).spatialReference
         log ('Ready to process ' + str(len(clumped_tile_pairs)) + ' clumps')
     
@@ -174,7 +175,7 @@ def process_clumps_mp (tuple):
         raise  
     return;
 
-def prepare_mp_tuples (fc_input, clumped_tile_pairs,temporary_assets):
+def prepare_mp_tuples (fc_input, clumped_tile_pairs, temporary_assets):
     mp_tuples = list()
        
     # Sort the list of clump ids then create a chunk for eash thread
@@ -192,7 +193,7 @@ def prepare_mp_tuples (fc_input, clumped_tile_pairs,temporary_assets):
         fc_output = os.path.join(os.path.dirname(arcpy.env.scratchGDB), 'scratch_TEMP_' + str(i) + '.gdb','mp_fence_sitters_merge')
         temporary_assets += [fc_output, os.path.dirname(fc_output)]
         # Create the tuple and add it to the list
-        mp_tuples.append((fc_input, fc_output, clumped_tile_pairs_mp, min_clump_id, max_clump_id))
+        mp_tuples.append((fc_input, fc_output, clumped_tile_pairs_mp, min_clump_id, max_clump_id, arcpy.env.scratchWorkspace))
         
     return mp_tuples
 
@@ -270,7 +271,7 @@ def merge (fc_input, fc_output):
         
         # Reassemble the feature classes
         for tuple in mp_tuples:
-            fc_input, fc_output_mp, clumped_tile_pairs, min_clump_id, max_clump_id = tuple
+            fc_input, fc_output_mp, clumped_tile_pairs, min_clump_id, max_clump_id, scratch_ws = tuple
             log('Appending ' + fc_output_mp + ' to ' + fc_output)
             arcpy.Append_management(fc_output_mp, fc_output)
 

@@ -4,6 +4,7 @@
 import sys
 import os
 import multiprocessing
+from functools import partial
 import traceback
 import common_functions
 common_functions.add_arcgis_to_sys_path()
@@ -61,8 +62,9 @@ def populate_fc (fc, field_name, field_value, field_type):
     del cursor
 
 
-def populate_mp (tuple_list):
+def populate_mp (tuple_list, scratch_ws):
     try:
+        arcpy.env.scratchWorkspace = scratch_ws
         # Add a new attribute to all of the shape files, then populate it with the shape file name
         fc_count = 1
         for tuple_ in tuple_list:
@@ -87,9 +89,9 @@ def populate (tuple_list):
         # Use multiprocessing support to do the work
         multiprocessing.set_executable(os.path.join(common_functions.get_install_path(), 'pythonw.exe'))
         log('Launching ' + str(_threads) + ' worker processes')
-        tuple_lists = [ tuple_list[i::_threads] for i in xrange(_threads if _threads < len(tuple_list) else len(tuple_list)) ]
+        tuple_lists = [tuple_list[i::_threads] for i in xrange(_threads if _threads < len(tuple_list) else len(tuple_list)) ]
         p = multiprocessing.Pool(_threads)
-        p.map(populate_mp, tuple_lists)
+        p.map(partial(populate_mp, scratch_ws=arcpy.env.scratchWorkspace), tuple_lists)
         p.close()
     else:
         fc_count = 1
