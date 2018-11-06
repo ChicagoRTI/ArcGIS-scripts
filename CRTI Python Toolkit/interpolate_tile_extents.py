@@ -29,14 +29,12 @@ import os
 import sys
 import multiprocessing
 import traceback
-from functools import partial
 import common_functions
 common_functions.add_arcgis_to_sys_path()
 import arcpy
 import tile_file_names
 import math
 
-_lock_mp = multiprocessing.Lock()
 _threads = multiprocessing.cpu_count()
 
 def get_install_path():
@@ -46,24 +44,27 @@ def log (message):
     common_functions.log(message)
     return
 
-def get_tile_extents_mp (name_list, log_file):
+def log_progress (message, max_range, step_count, threads=1):
+    common_functions.log_progress (message, max_range, step_count, threads)
+
+def get_tile_extents_mp (name_list):
     try:
         # This function is run in parallel on multiple processors. Read the list of assigned shape files
         # and return a dictionary object with the extent information for each shape file
-        common_functions.log_mp(log_file, "Starting")
+        log("Starting")
         count = 1
         tiles = dict()
         for file_name in name_list:
-            common_functions.log_progress_mp (log_file, "Reading shape file", len(name_list), count)    
+            log_progress ("Reading shape file", len(name_list), count, _threads)    
             # Get the extent information
             extent = arcpy.Describe(file_name).extent
             tiles[file_name] = extent.XMin, extent.YMin, extent.XMax, extent.YMax, extent.width, extent.height
             count = count + 1
-        common_functions.log_mp(log_file, "Finished")
+        log("Finished")
         return tiles
     except Exception as e:
-        common_functions.log_mp(log_file, "Exception: " + str(e))
-        common_functions.log_mp(log_file, traceback.format_exc())
+        log("Exception: " + str(e))
+        log(traceback.format_exc())
         raise
     return
 
@@ -81,7 +82,6 @@ def adjust_boundary (reference, boundary, direction, step):
 
 def main_process_fc_files (tile_file_names_table, tile_dim, fc_output_file):
     fc_output_path, fc_output_name = os.path.split(fc_output_file)
-    log_fn = os.path.join(arcpy.env.scratchFolder, 'log_mp.txt')        
     tile_dim = float(tile_dim)
     
     # Create the output directory if it doesn't already exist
@@ -106,10 +106,9 @@ def main_process_fc_files (tile_file_names_table, tile_dim, fc_output_file):
         # a single dictionary object
         multiprocessing.set_executable(os.path.join(get_install_path(), 'pythonw.exe'))
         log('Launching ' + str(_threads) + ' worker processes')
-        log('Logging multiprocess activity to ' + log_fn)
         name_lists = [ name_list[i::_threads] for i in xrange(_threads if _threads < len(name_list) else len(name_list)) ]
         p = multiprocessing.Pool(_threads)
-        tile_dicts = p.map(partial(get_tile_extents_mp, log_file=log_fn), name_lists)
+        tile_dicts = p.map(get_tile_extents_mp, name_lists)
         p.close()
         p.join()
         tiles = dict()

@@ -55,8 +55,6 @@ def create_table (input_fc_folder, output_table):
     names = [os.path.join(input_fc_folder, fc_name) for fc_name in arcpy.ListFeatureClasses()]   
     log (str(len(names)) + ' files found')
     write_file_names (output_table, names)
-#    x = read_file_names(output_table)
-#    print(x)
     return 
  
 

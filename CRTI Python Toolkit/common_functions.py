@@ -6,7 +6,6 @@ import time
 import os
 import sys
 import multiprocessing
-import gc
 
 _threads = multiprocessing.cpu_count()
 
@@ -22,7 +21,6 @@ add_arcgis_to_sys_path()
 
 import arcpy
 
-log_mp_fn = os.path.join(arcpy.env.scratchFolder, 'log_mp.txt')
 
 def log (message):
     message = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + ": " + str(os.getpid()) + ": " + message
@@ -38,26 +36,10 @@ def log (message):
     # Log to arcGIS
     arcpy.AddMessage(message)
     
-def log_mp (log_file, message):
-    # Log the message to both a file and arcGIS.  Note that collisions may occur when logging
-    # from multiple processes. Logging to stdout when running from a spawned processor
-    # does not work on windows
-    message = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()) + ": " + str(os.getpid()) + ": " + message 
-    log_file = open(log_file, "a+", 0)
-    log_file.write(message + '\n')
-    log_file.close()
-    if r'\ArcGIS' not in sys.executable:
-        print (message)
-        sys.stdout.flush()
-    arcpy.AddMessage(message)
-
-def log_progress (message, max_range, step_count):
-    if step_count % ((max_range/100)+1) == 0:
-        log (message + ' (' + str(step_count) + ' of ' + str(max_range) + ')')
-
-def log_progress_mp (log_file, message, max_range, step_count):
+    
+def log_progress (message, max_range, step_count, threads=1):
     if step_count % (((max_range*_threads)/100)+1) == 0:
-        log_mp (log_file, message + ' (' + str(step_count) + ' of ' + str(max_range) + ')')
+        log (message + ' (' + str(step_count) + ' of ' + str(max_range) + ')')    
 
     
 def get_install_path():
@@ -100,7 +82,6 @@ def move_to_in_memory (fn, temporary_assets):
 
 def create_index (fn, fields, index_name):
     if (isOptimizable(fn)):
-#        if attr not in [index.fields[0].name for index in arcpy.ListIndexes(fn)]:
         if index_name not in [index.name for index in arcpy.ListIndexes(fn)]:
             log('Creating index ' + index_name + ' in ' + fn)  
             arcpy.AddIndex_management(fn, fields, index_name, 'UNIQUE', 'ASCENDING')

@@ -18,6 +18,10 @@ _threads = multiprocessing.cpu_count()
 
 def log (message):
     common_functions.log(message)
+    return
+
+def log_progress (message, max_range, step_count, threads=1):
+    common_functions.log_progress (message, max_range, step_count, threads)
     
 
 
@@ -66,12 +70,12 @@ def populate_mp (tuple_list):
             field_name = tuple_[_FIELD_NAME]
             field_value = tuple_[_FIELD_VALUE]
             field_type = tuple_[_FIELD_TYPE]
-            common_functions.log_progress_mp (common_functions.log_mp_fn, 'Populating ' + field_name + ' with ' + str(field_value) + ' in ' + os.path.basename(fc), len(tuple_list), fc_count)    
+            log_progress ('Populating ' + field_name + ' with ' + str(field_value) + ' in ' + os.path.basename(fc), len(tuple_list), fc_count, _threads)    
             populate_fc (fc, field_name, field_value, field_type)    
             fc_count = fc_count+1
     except Exception as e:
-        common_functions.log_mp(common_functions.log_mp_fn, "Exception: " + str(e))
-        common_functions.log_mp(common_functions.log_mp_fn, traceback.format_exc())
+        log("Exception: " + str(e))
+        log(traceback.format_exc())
         arcpy.AddError(str(e))
         raise  
 
@@ -81,10 +85,8 @@ def populate (tuple_list):
    # if len(tuple_list) > sys.maxint and 'UNIQUE_ID' not in [i[_FIELD_VALUE] for i in tuple_list]:  # turn off mp support due to ESRI bug
     if len(tuple_list) > 1 and 'UNIQUE_ID' not in [i[_FIELD_VALUE] for i in tuple_list]:  # turn off mp support due to ESRI bug
         # Use multiprocessing support to do the work
-        log_mp_fn = os.path.join(arcpy.env.scratchFolder, 'log_mp.txt')
         multiprocessing.set_executable(os.path.join(common_functions.get_install_path(), 'pythonw.exe'))
         log('Launching ' + str(_threads) + ' worker processes')
-        log('Logging multiprocess activity to ' + log_mp_fn)
         tuple_lists = [ tuple_list[i::_threads] for i in xrange(_threads if _threads < len(tuple_list) else len(tuple_list)) ]
         p = multiprocessing.Pool(_threads)
         p.map(populate_mp, tuple_lists)
