@@ -32,7 +32,7 @@ class prepare_canopy_data(object):
             datatype="Folder",
             parameterType="Required",
             direction="Input")
-        tile_folder.value = r'D:\CRTI\GIS data\DP_sample_tile_block'
+        tile_folder.value = r'E:\Local_Geodata\TEMP_WillCo_Canopy Tiles'
                 
         tile_dimension = arcpy.Parameter(
             displayName="Tile dimension size (feet)",
@@ -40,7 +40,7 @@ class prepare_canopy_data(object):
             datatype="Double",
             parameterType="Required",
             direction="Input")
-        tile_dimension.value = 2500.0
+        tile_dimension.value = 1500.0
         
         ndvi_raster = arcpy.Parameter(
             displayName="NDVI raster file",
@@ -48,7 +48,7 @@ class prepare_canopy_data(object):
             datatype="Folder",
             parameterType="Required",
             direction="Input")
-        ndvi_raster.value =r'D:\CRTI\GIS data\Earth Engine\DupageNDVI'
+        ndvi_raster.value =r'E:\Local_Geodata\NAIP_NDVI_WillCo'
         
         start_step = arcpy.Parameter(
             displayName="Start step",
@@ -64,7 +64,7 @@ class prepare_canopy_data(object):
             datatype="Folder",
             parameterType="Required",
             direction="Input")
-        scratch_workspace.value = os.getenv('USERPROFILE') + r'\Documents\ArcGIS' 
+        scratch_workspace.value = r'E:\Local_Geodata\scratch.gdb' 
 
         output_fc = arcpy.Parameter(
             displayName="Output feature class",
@@ -72,7 +72,7 @@ class prepare_canopy_data(object):
             datatype="DEFeatureClass",
             parameterType="Required",
             direction="Output")
-        output_fc.value = arcpy.env.scratchGDB + '/prepared_canopy_data'
+        output_fc.value = r'E:\Local_Geodata\scratch.gdb\WillCo_TreeCanopy'
         
         params = [tile_folder, tile_dimension, ndvi_raster, start_step, scratch_workspace, output_fc]
         return params
