@@ -56,8 +56,7 @@ class prepare_canopy_data(object):
             direction="Input")
         county_name.filter.type = "ValueList"
         county_name.filter.list = self.county_names
-        self.county_names
-    
+        county_name.value = self.config.sections()[0]
     
         tile_folder = arcpy.Parameter(
             displayName="Tile folder",
