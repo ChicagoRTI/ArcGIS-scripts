@@ -1,2 +1,3 @@
 *.pyc
 *.xml
+config_input_parameters.properties
