@@ -137,6 +137,8 @@ class prepare_canopy_data(object):
     def execute(self, parameters, messages):
         # Write out the county input parameters to the config file
         if parameters[7].value == True:
+            if parameters[0].valueAsText not in self.config.sections():
+                self.config.add_section(parameters[0].valueAsText)
             for i in range(1,len(self.input_parm_names)):
                 self.config.set(parameters[0].valueAsText, self.input_parm_names[i], parameters[i].valueAsText)
             self.config.write(open(self.config_fn, 'w'))
