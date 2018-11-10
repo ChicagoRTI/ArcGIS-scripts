@@ -84,8 +84,8 @@ def populate_mp (tuple_list, scratch_ws):
 # Takes a list of tuples <feature_class, field_value, field_name, field_type>    
 def populate (tuple_list):
     
-   # if len(tuple_list) > sys.maxint and 'UNIQUE_ID' not in [i[_FIELD_VALUE] for i in tuple_list]:  # turn off mp support due to ESRI bug
-    if len(tuple_list) > 1 and 'UNIQUE_ID' not in [i[_FIELD_VALUE] for i in tuple_list]:  # turn off mp support due to ESRI bug
+    if len(tuple_list) > sys.maxint and 'UNIQUE_ID' not in [i[_FIELD_VALUE] for i in tuple_list]:  # turn off mp support due to ESRI bug
+#    if len(tuple_list) > 1 and 'UNIQUE_ID' not in [i[_FIELD_VALUE] for i in tuple_list]:  # turn off mp support due to ESRI bug in AddField
         # Use multiprocessing support to do the work
         multiprocessing.set_executable(os.path.join(common_functions.get_install_path(), 'pythonw.exe'))
         log('Launching ' + str(_threads) + ' worker processes')
