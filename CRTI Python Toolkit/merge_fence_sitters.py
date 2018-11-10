@@ -252,6 +252,7 @@ def merge (fc_input, fc_output):
 
         # Extract the fence sitters to  new feature class.
         fence_sitters_only = os.path.join(os.path.dirname(fc_output), 'fence_sitters_only')
+        fence_sitters_only = os.path.join(arcpy.env.scratchGDB, 'fence_sitters_only')
         log ("Reducing working set - copy fence sitters to " + fence_sitters_only)
         arcpy.FeatureClassToFeatureClass_conversion(fc_input, os.path.dirname(fence_sitters_only), os.path.basename(fence_sitters_only), '"ClumpId" IS NOT NULL')
         common_functions.create_index (fence_sitters_only, ['ClumpId'], 'ClumpIdx')  

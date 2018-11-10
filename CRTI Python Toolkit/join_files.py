@@ -58,6 +58,7 @@ def join (left_side_fc, left_side_key, right_side_fc, right_side_key, right_side
     # key, we simply copy to specified right hand fields into the left side feature class 
     # the matching keys
     count = int(arcpy.GetCount_management(left_side_fc).getOutput(0))
+    arcpy.SetProgressor("step", "Joining files...", 0, count, 1)
     i = 0
     with arcpy.da.UpdateCursor(left_side_fc, [left_side_key] + right_side_include_fields.split(';'), sql_clause=(None, 'ORDER BY ' + left_side_key)) as left_side_cursor:
         for left_side_row in left_side_cursor:

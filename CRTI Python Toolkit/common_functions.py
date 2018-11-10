@@ -38,6 +38,7 @@ def log (message):
     
     
 def log_progress (message, max_range, step_count, threads=1):
+    arcpy.SetProgressorPosition()
     if step_count % (((max_range*_threads)/100)+1) == 0:
         log (message + ' (' + str(step_count) + ' of ' + str(max_range) + ')')    
 

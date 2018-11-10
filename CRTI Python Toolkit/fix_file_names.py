@@ -29,6 +29,7 @@ def fixup (tile_file_names_table):
     fns_fixed = list()
     #loop through the name and rename
     count = 1
+    arcpy.SetProgressor("step", "Checking files...", 0, len(fns), 1)
     for fn in fns:
         common_functions.log_progress ('Checking file for fixup', len(fns), count)    
 
