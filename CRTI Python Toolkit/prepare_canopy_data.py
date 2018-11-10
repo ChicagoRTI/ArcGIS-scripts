@@ -20,7 +20,6 @@ import arcpy.sa
 import populate_field
 import interpolate_tile_extents
 import merge_fence_sitters
-import fix_file_names
 import tile_file_names
 import join_files
 import compute_zonal_stats
@@ -40,7 +39,7 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, 
     
         step_start = int(start_step)
         step_count = 1
-        step_total = 15
+        step_total = 14
 
         common_functions.log("Logging to " + arcpy.env.scratchFolder)
         common_functions.step_header (0, step_total, 'Input parameters', [input_tile_folder, tile_dimension, ndvi_raster_folder, start_step, scratch_workspace, output_fc], [])
@@ -64,12 +63,7 @@ def prepare_canopy_data (input_tile_folder, tile_dimension, ndvi_raster_folder, 
             common_functions.step_header (step_count, step_total, 'Collecting tile file names', [input_tile_folder], [tile_file_name_table])
             tile_file_names.create_table(input_tile_folder, tile_file_name_table)
         step_count += 1       
-    
-        if step_count >= step_start:
-            common_functions.step_header (step_count, step_total, 'Fixing up tile file names', [tile_file_name_table], [tile_file_name_table])
-            fix_file_names.fixup(tile_file_name_table)
-        step_count += 1       
-        
+            
         if step_count >= step_start:
             common_functions.step_header (step_count, step_total, 'Populating TileId in all tiles', [input_tile_folder], [input_tile_folder])
             populate_field.populate([l + (TILE_ID_COLUMN_NAME,'Integer',) for l in tile_file_names.read_file_names(tile_file_name_table)]) 

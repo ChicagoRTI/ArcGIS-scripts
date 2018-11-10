@@ -5,7 +5,7 @@ Created on Tue Sep 18 16:10:17 2018
 @author: Don
 """
 # To run from Spyder iPython console:
-#   runfile('D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit/tile_file_names.py', wdir='D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit', args="'D:/CRTI/GIS data/will_county_tree_crowns_sample/renamed' 'C:\\Users\\Don\\Documents\\ArcGIS\\scratch.gdb\\tile_names'")
+#   runfile('D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit/tile_file_names.py', wdir='D:/CRTI/python_projects/ArcGIS-scripts/CRTI Python Toolkit', args="'D:/CRTI/GIS data/cook_county_tree_crowns_sample' 'D:/CRTI/GIS data/temp/scratch.gdb/tile_file_names'")
 #
 
 import os
@@ -13,9 +13,27 @@ import sys
 import common_functions
 common_functions.add_arcgis_to_sys_path()
 import arcpy
+import glob
 
 _TILE_NAME = 'TileName'
 _TILE_ID = 'TileId'
+
+_SHAPE_FILE_EXTENSIONS = [
+        '.shp',
+        '.shx',
+        '.dbf',
+        '.sbn',
+        '.sbx',
+        '.fbn',
+        '.fbx',
+        '.ain',
+        '.aih',
+        '.atx',
+        '.ixs',
+        '.mxs',
+        '.prj',
+        '.xml',
+        '.cpg']
 
 def log (message):
     common_functions.log(message)
@@ -52,14 +70,27 @@ def write_file_names (table, file_names):
 def create_table (input_fc_folder, output_table):
     log ('Gathering file names from ' + input_fc_folder)
     arcpy.env.workspace = input_fc_folder
-    names = [os.path.join(input_fc_folder, fc_name) for fc_name in arcpy.ListFeatureClasses()]   
+    
+    # Check if the input is a  folder (implies shape files) and any files need to be renames
+    if arcpy.Describe(input_fc_folder).dataType == 'Folder':
+        for full_path in glob.glob(os.path.join(input_fc_folder,'*')):
+            file_name, extension = os.path.splitext(os.path.basename(full_path))
+            if '.' in file_name and extension in _SHAPE_FILE_EXTENSIONS:
+                try:
+                    os.rename(full_path, os.path.join(input_fc_folder, file_name.replace('.', '_') + extension))
+                except:
+                    log ('Failed renaming ' + full_path)
+
+    # Gather up the feature class names
+    names = [os.path.join(input_fc_folder, fc_name) for fc_name in arcpy.ListFeatureClasses()]
+        
     log (str(len(names)) + ' files found')
     write_file_names (output_table, names)
     return 
  
 
 if __name__ == '__main__':
-    create_table(sys.argv[1], sys.argv[2])
+    create_table(os.path.normpath(sys.argv[1]), os.path.normpath(sys.argv[2]))
     
     
 
