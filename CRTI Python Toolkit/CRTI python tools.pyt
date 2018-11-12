@@ -56,7 +56,7 @@ class prepare_canopy_data(object):
             direction="Input")
         county_name.filter.type = "ValueList"
         county_name.filter.list = self.county_names
-        county_name.value = self.config.sections()[0]
+        county_name.value = self.county_names[0]
     
         tile_folder = arcpy.Parameter(
             displayName="Tile folder",
@@ -64,6 +64,7 @@ class prepare_canopy_data(object):
             datatype="Folder",
             parameterType="Required",
             direction="Input")
+        tile_folder.value = self.config.get(county_name.value, self.input_parm_names[1])
                 
         tile_dimension = arcpy.Parameter(
             displayName="Tile dimension size (feet)",
@@ -71,13 +72,15 @@ class prepare_canopy_data(object):
             datatype="Double",
             parameterType="Required",
             direction="Input")
+        tile_dimension.value = self.config.get(county_name.value, self.input_parm_names[2])
         
         ndvi_raster = arcpy.Parameter(
-            displayName="NDVI raster file",
+            displayName="NDVI raster folder",
             name="ndvi_raster",
             datatype="Folder",
             parameterType="Required",
             direction="Input")
+        ndvi_raster.value = self.config.get(county_name.value, self.input_parm_names[3])
         
         start_step = arcpy.Parameter(
             displayName="Start step",
@@ -85,6 +88,7 @@ class prepare_canopy_data(object):
             datatype="Long",
             parameterType="Required",
             direction="Input")
+        start_step.value = self.config.get(county_name.value, self.input_parm_names[4])
         
         scratch_workspace = arcpy.Parameter(
             displayName="Scratch workspace",
@@ -92,14 +96,16 @@ class prepare_canopy_data(object):
             datatype="Folder",
             parameterType="Required",
             direction="Input")
-
+        scratch_workspace.value = self.config.get(county_name.value, self.input_parm_names[5])
+        
         output_feature_class = arcpy.Parameter(
             displayName="Output feature class",
             name="output_feature_class",
             datatype="DEFeatureClass",
             parameterType="Required",
             direction="Output")
-
+        output_feature_class.value = self.config.get(county_name.value, self.input_parm_names[6])
+        
         save_parameters = arcpy.Parameter(
             displayName="Save parameters",
             name="save_parameters",
