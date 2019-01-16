@@ -188,25 +188,24 @@ class adjacent_canopy_comp(object):
             parameterType="Required",
             direction="Input")
         
-        municipality = arcpy.Parameter(
-            displayName="Municipality",
-            name="municipality",
-            datatype="String",
-            parameterType="Required",
-            direction="Input")
-        municipality.filter.type = "ValueList"  
-        municipality.filter.list = []  
+#        municipality = arcpy.Parameter(
+#            displayName="Municipality",
+#            name="municipality",
+#            datatype="String",
+#            parameterType="Required",
+#            direction="Input")
+#        municipality.filter.type = "ValueList"  
+#        municipality.filter.list = []  
         
         
         output_csv = arcpy.Parameter(
-            displayName="Output csv file",
+            displayName="Output csv directory",
             name="output_csv",
-            datatype="DEFile",
+            datatype="DEFolder",
             parameterType="Required",
-            direction="Output")
-        output_csv.filter.list = ['csv']
+            direction="Input")
         
-        params = [shape_file, municipality, output_csv]
+        params = [shape_file, output_csv]
         return params
 
     def isLicensed(self):
@@ -215,11 +214,11 @@ class adjacent_canopy_comp(object):
 
     def updateParameters(self, parameters):
         # Modify the selection list of municipalities based on the NAME column in the input shape file
-        if parameters[0].value:  
-            with arcpy.da.SearchCursor(parameters[0].valueAsText, "NAME") as rows:  
-                parameters[1].filter.list = sorted(list(set([row[0] for row in rows])))  
-        else:  
-            parameters[1].filter.list = []  
+#        if parameters[0].value:  
+#            with arcpy.da.SearchCursor(parameters[0].valueAsText, "NAME") as rows:  
+#                parameters[1].filter.list = sorted(list(set([row[0] for row in rows])))  
+#        else:  
+#            parameters[1].filter.list = []  
         return
 
     def updateMessages(self, parameters):
@@ -231,7 +230,6 @@ class adjacent_canopy_comp(object):
         from adjacent_canopy_comp import adjacent_canopy_comp
         adjacent_canopy_comp.main_process_shape_file(
             os.path.normpath(parameters[0].valueAsText), 
-            parameters[1].valueAsText, 
-            os.path.normpath(parameters[2].valueAsText)) 
+            os.path.normpath(parameters[1].valueAsText)) 
         return
 
