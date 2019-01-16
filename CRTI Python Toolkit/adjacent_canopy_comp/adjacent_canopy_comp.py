@@ -14,6 +14,7 @@ Created on Tue Mar 20 11:07:22 2018
 # Make sure the ArcGIS components are in the system path (from C:\Program Files (x86)\ArcGIS\Desktop10.6\Support\Python/Desktop10.6.pth)
 import os
 import sys
+
 __arc_gis_dir = "C:\\Program Files (x86)\\ArcGIS\\Desktop10.6\\"
 __arc_gis_path = [__arc_gis_dir + "bin",
                 __arc_gis_dir + "ArcPy",
@@ -59,6 +60,7 @@ def main_process_shape_file (fc_input, output_csv_dir):
     for municipality_name in all_municipalities_names:
         arcpy.AddMessage ("Processing " + municipality_name)
         print ("Processing " + municipality_name)
+        municipality_name = municipality_name.replace('.', '')
 
         # Create a layer with all municipalities
         arcpy.MakeFeatureLayer_management(fc_input, all_municipalities_layer)
