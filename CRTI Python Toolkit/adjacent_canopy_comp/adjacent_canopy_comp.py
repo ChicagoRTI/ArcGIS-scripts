@@ -26,19 +26,30 @@ for p in __arc_gis_path:
 import arcpy
 
 
+#__fields_to_keep = {
+#        "NAME" : "Municipality",
+#        "CANOPY" : "Canopy",
+#        "GRASS_SHRU" : "Vegetation",
+#        "BARE_SOIL" : "Bare Soil",
+#        "WATER" : "Water",
+#        "BUILDING" : "Buildings",
+#        "ROADS_RAIL" : "Roads/Rail",
+#        "OTHER_PAVE" : "Other Paved"
+#        }
+
+
+
+
 __fields_to_keep = {
-        "NAME" : "Municipality",
+        "COMMUNITY" : "Municipality",
         "CANOPY" : "Canopy",
-        "GRASS_SHRU" : "Vegetation",
-        "BARE_SOIL" : "Bare Soil",
+        "VEGETATION" : "Vegetation",
+        "BARESOIL" : "Bare Soil",
         "WATER" : "Water",
-        "BUILDING" : "Buildings",
-        "ROADS_RAIL" : "Roads/Rail",
-        "OTHER_PAVE" : "Other Paved"
+        "BUILDINGS" : "Buildings",
+        "ROADRAIL" : "Roads/Rail",
+        "OTHERPAVED" : "Other Paved"
         }
-
-
-
 def main_process_shape_file (fc_input, output_csv_dir):
     print (fc_input)
     print (output_csv_dir)
@@ -53,7 +64,7 @@ def main_process_shape_file (fc_input, output_csv_dir):
     
     # Create a list of all the municipalities
     all_municipalities_names = list()
-    with arcpy.da.SearchCursor(fc_input, "NAME") as rows:  
+    with arcpy.da.SearchCursor(fc_input, "COMMUNITY") as rows:  
         all_municipalities_names = sorted(list(set([row[0] for row in rows])))
     
     # Generate a csv file for each municipality
@@ -67,7 +78,7 @@ def main_process_shape_file (fc_input, output_csv_dir):
         
         # Create a feature class with just the selected municipality
         arcpy.MakeFeatureLayer_management(fc_input, selected_municipality_layer)
-        arcpy.SelectLayerByAttribute_management(selected_municipality_layer, "NEW_SELECTION", "NAME = '" + municipality_name + "'")
+        arcpy.SelectLayerByAttribute_management(selected_municipality_layer, "NEW_SELECTION", "COMMUNITY = '" + municipality_name + "'")
         arcpy.CopyFeatures_management(selected_municipality_layer, selected_municipality_fc)
         
         # Get all adjacent municipalities
