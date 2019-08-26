@@ -56,10 +56,6 @@ def main_process_shape_file (fc_input, output_csv_dir):
     # Create a list of all the municipalities
     all_municipalities_names = list()
     with arcpy.da.SearchCursor(fc_input, "COMMUNITY") as rows:  
-#        for row in rows:
-#            print (str(row[0]))
-#            all_municipalities_names.append(row[0])
-#        all_municipalities_names = sorted(list(set(all_municipalities_names)))
          all_municipalities_names = sorted(list(set([row[0] for row in rows])))
     
     # Generate a csv file for each municipality
