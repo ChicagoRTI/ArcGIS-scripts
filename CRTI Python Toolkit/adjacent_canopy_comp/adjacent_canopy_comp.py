@@ -83,7 +83,7 @@ def main_process_shape_file (fc_input, output_csv_dir):
             # Write field name header line  
             csvwriter.writerow(output_field_names)  
             # Write data rows  
-            with arcpy.da.SearchCursor(table_view, input_field_names) as s_cursor:  
+            with arcpy.da.SearchCursor(adjacent_municipalities_fc, input_field_names) as s_cursor:  
                 for row in s_cursor:  
                     csvwriter.writerow(row)
     return;
