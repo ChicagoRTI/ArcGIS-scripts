@@ -50,7 +50,6 @@ def main_process_shape_file (fc_input, output_csv_dir):
     selected_municipality_layer = os.path.join(arcpy.env.scratchGDB, 'selected_municipality')
     selected_municipality_fc = os.path.join(arcpy.env.scratchGDB, 'adjacent_comps')
     adjacent_municipalities_fc = os.path.join(arcpy.env.scratchGDB, 'adjacent_municipalities')
-    table_view = os.path.join(arcpy.env.scratchGDB, 'table_view')
     print (selected_municipality_fc)
     
     # Create a list of all the municipalities
