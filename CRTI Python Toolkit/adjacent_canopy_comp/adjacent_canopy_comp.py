@@ -24,36 +24,27 @@ for p in __arc_gis_path:
 
 
 import arcpy
+import csv
 
 
-#__fields_to_keep = {
-#        "NAME" : "Municipality",
-#        "CANOPY" : "Canopy",
-#        "GRASS_SHRU" : "Vegetation",
-#        "BARE_SOIL" : "Bare Soil",
-#        "WATER" : "Water",
-#        "BUILDING" : "Buildings",
-#        "ROADS_RAIL" : "Roads/Rail",
-#        "OTHER_PAVE" : "Other Paved"
-#        }
+__fields_to_keep = [ 
+        ["COMMUNITY", "Municipality"],
+        ["CANOPY", "Canopy"],
+        ["VEGETATION", "Vegetation"],
+        ["BARESOIL", "Bare Soil"],
+        ["WATER", "Water"],
+        ["BUILDINGS", "Buildings"],
+        ["ROADRAIL", "Roads/Rail"],
+        ["OTHERPAVED", "Other Paved"]
+        ]
 
-
-
-
-__fields_to_keep = {
-        "COMMUNITY" : "Municipality",
-        "CANOPY" : "Canopy",
-        "VEGETATION" : "Vegetation",
-        "BARESOIL" : "Bare Soil",
-        "WATER" : "Water",
-        "BUILDINGS" : "Buildings",
-        "ROADRAIL" : "Roads/Rail",
-        "OTHERPAVED" : "Other Paved"
-        }
 def main_process_shape_file (fc_input, output_csv_dir):
     print (fc_input)
     print (output_csv_dir)
     arcpy.env.overwriteOutput = True
+
+    input_field_names = [f[0] for f in __fields_to_keep]
+    output_field_names = [f[1] for f in __fields_to_keep]
 
     all_municipalities_layer = os.path.join(arcpy.env.scratchGDB, 'all_municipalities')
     selected_municipality_layer = os.path.join(arcpy.env.scratchGDB, 'selected_municipality')
@@ -65,7 +56,11 @@ def main_process_shape_file (fc_input, output_csv_dir):
     # Create a list of all the municipalities
     all_municipalities_names = list()
     with arcpy.da.SearchCursor(fc_input, "COMMUNITY") as rows:  
-        all_municipalities_names = sorted(list(set([row[0] for row in rows])))
+#        for row in rows:
+#            print (str(row[0]))
+#            all_municipalities_names.append(row[0])
+#        all_municipalities_names = sorted(list(set(all_municipalities_names)))
+         all_municipalities_names = sorted(list(set([row[0] for row in rows])))
     
     # Generate a csv file for each municipality
     for municipality_name in all_municipalities_names:
@@ -84,24 +79,17 @@ def main_process_shape_file (fc_input, output_csv_dir):
         # Get all adjacent municipalities
         arcpy.SelectLayerByLocation_management(all_municipalities_layer, 'intersect', selected_municipality_layer)
         arcpy.CopyFeatures_management(all_municipalities_layer, adjacent_municipalities_fc)
-        
-        # Get the fields from the input
-        all_fields= arcpy.ListFields(fc_input)
-        # Create a fieldinfo object and populate it to describe the fields we want to be visible
-        field_info = arcpy.FieldInfo()
-        for field in all_fields:
-            if field.name in __fields_to_keep.keys():
-                field_info.addField(field.name, __fields_to_keep[field.name], "VISIBLE", "")
-            else:
-                field_info.addField(field.name, field.name, "HIDDEN", "")
-        field_info.addField("OBJECTID_1", "OBJECTID_1", "HIDDEN", "")
-        field_info.addField("Shape_Length", "Shape_Length", "HIDDEN", "")
-        # Make a table view so we can export just the tabular data
-        arcpy.MakeTableView_management(adjacent_municipalities_fc, table_view, "", "", field_info)
-        
-        # Export the table to a csv file
-        arcpy.CopyRows_management(table_view, os.path.join(output_csv_dir, municipality_name) + '.csv')
-        
+
+        # Create the output CSV  
+        outputCSV = os.path.join(output_csv_dir, municipality_name) + '.csv'
+        with open(outputCSV, "w") as csvfile:  
+            csvwriter = csv.writer(csvfile, delimiter=',', lineterminator='\n')  
+            # Write field name header line  
+            csvwriter.writerow(output_field_names)  
+            # Write data rows  
+            with arcpy.da.SearchCursor(table_view, input_field_names) as s_cursor:  
+                for row in s_cursor:  
+                    csvwriter.writerow(row)
     return;
 
 
