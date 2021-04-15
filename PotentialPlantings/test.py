@@ -42,7 +42,7 @@ def run ():
     with arcpy.da.SearchCursor(neg_buffered_fc, ['OBJECTID', 'SHAPE@']) as cursor:
         for attrs in cursor:
             polygon = attrs[1]
-            x_min, y_min, x_max, y_max = polygon.extent.XMin, polygon.extent.YMin, polygon.extent.XMax, polygon.extent.YMax, 
+            x_min, y_min, x_max, y_max = polygon.extent.XMin, polygon.extent.YMin, polygon.extent.XMax, polygon.extent.YMax 
 
             center = arcpy.Point((x_min+x_max)/2, (y_min+y_max)/2)
             tiers = math.ceil(max((x_max-x_min)/2, (y_max-y_min)/2) / diameter)
@@ -56,8 +56,11 @@ def run ():
             # The mask orgin is the NW corner and indexed as  [row][col]
             mask_dim = tiers*2 + 1
             mask = np.full( (mask_dim, mask_dim), OPEN, dtype=int)
+            __trim_mask (mask, mask_dim, nw_corner, polygon)
+                         
             plant_heres = list()
-
+            
+            
             for tree_size in [BIG, MEDIUM, SMALL]:
             
                 for tier in range(0, tiers+1):
@@ -65,30 +68,15 @@ def run ():
                     right= [(row, center_col + tier)  for row in range (center_col - tier, center_col + tier + 1)]
                     bot  = [(center_row + tier, col)  for col in reversed(range (center_row - tier, center_row + tier + 1))]
                     left = [(row, center_col - tier)  for row in reversed(range (center_col - tier, center_col + tier + 1))]
-                    for tier_coordinate in top + right + bot + left:
-    
-                        row = tier_coordinate[0]
-                        col = tier_coordinate[1]
-                        
-                        if mask[row, col] == OPEN:                                                  
-                            # Is the point outside of the polygon extent?
-                            tier_point = __mask_to_point (row, col, nw_corner)
-                            if tier_point.X >= x_min and tier_point.X <= x_max and tier_point.Y >= y_min and tier_point.Y <= y_max:
+#                    for row, col in top + right + bot + left:
+                    for row, col in [(r,c) for (r,c)in top + right + bot + left if mask[r, c] == OPEN]:
+#                        if mask[row, col] == OPEN:                                                  
         
-                                fp_row, fp_col, fp_row_dim, fp_col_dim = __get_footprint (row, col, tree_size, mask_dim)
-#                                print ("(%i,%i): %i x %i" % (fp_row, fp_col, fp_row_dim, fp_col_dim))                        
-                                if __is_footprint_clean (mask, fp_row, fp_col, fp_row_dim, fp_col_dim):                        
-                                    if tier_point.within(polygon):
-                                        __occupy_footprint (mask, fp_row, fp_col, fp_row_dim, fp_col_dim, row, col, tree_size)
-                                        plant_heres.append ( (tier_point, tree_size) )  
-                                    else:
-                                        mask[row][col] = OUTSIDE_POLYGON
-                            else:
-                                mask[row][col] = BEYOND_EXTENT
-
-                            # with arcpy.da.InsertCursor(mask_fc, ['SHAPE@', 'code', 'row', 'col']) as cursor:
-                            #     cursor.insertRow([tier_point, mask[row][col], row, col])
-                            
+                        fp_row, fp_col, fp_row_dim, fp_col_dim = __get_footprint (row, col, tree_size, mask_dim)
+#                       print ("(%i,%i): %i x %i" % (fp_row, fp_col, fp_row_dim, fp_col_dim))                        
+                        if __is_footprint_clean (mask, fp_row, fp_col, fp_row_dim, fp_col_dim):                        
+                            __occupy_footprint (mask, fp_row, fp_col, fp_row_dim, fp_col_dim, row, col, tree_size)
+                            plant_heres.append ( (__mask_to_point (row, col, nw_corner), tree_size) )  
 
 
             with arcpy.da.InsertCursor(matrix_fc, ['SHAPE@', 'code']) as cursor:
@@ -106,6 +94,15 @@ def run ():
     #print ("%i points checked" % points_checked)    
 
 
+def __trim_mask (mask, mask_dim, nw_corner, polygon):
+    x_min, y_min, x_max, y_max = polygon.extent.XMin, polygon.extent.YMin, polygon.extent.XMax, polygon.extent.YMax, 
+    for r in range (0, mask_dim):
+        for c in range (0, mask_dim):
+            point = __mask_to_point (r, c, nw_corner)
+            if point.X < x_min or point.X > x_max or point.Y < y_min or point.Y > y_max or not point.within(polygon):
+                mask[r][c] = OUTSIDE_POLYGON
+            
+    
 def __mask_to_point (row, col, nw_corner):
     x = nw_corner.X + col*diameter
     y = nw_corner.Y - row*diameter
