@@ -13,7 +13,7 @@ logger = pp.logger.logger.get('pp_log')
 
 WRITE_TO_DEBUG_MASK_FC = False
 
-USE_NUMPY = False
+USE_NUMPY = True
 
 
 #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\data\test.gdb\opening_single'
