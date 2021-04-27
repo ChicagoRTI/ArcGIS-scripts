@@ -7,6 +7,9 @@ import math
 import numpy as np
 from datetime import datetime
 
+import pp.logger.logger
+logger = pp.logger.logger.get('pp_log')
+
 
 WRITE_TO_DEBUG_MASK_FC = False
 
@@ -40,23 +43,25 @@ TREE_FOOTPRINT_DIM = {SMALL:  1,
                       BIG:    5}
 
 def run ():
-    print ("Using numpy? %s" % str(USE_NUMPY))    
+    logger.info ("Logging to %s" % pp.logger.logger.LOG_FILE)
+    logger.debug  ("Using numpy? %s" % str(USE_NUMPY))    
     times = [0,0,0,0]    
-    times_totals = [0,0,0,0,0,0]             
+    stats_totals = [0,0,0,0,0,0,0,0]             
                 
     arcpy.management.DeleteFeatures(MATRIX_FC)
     arcpy.management.DeleteFeatures(MASK_FC)
 
-    print ("Negative buffering")    
+    logger.debug  ("Negative buffering")    
     arcpy.management.Delete(NEG_BUFFERED_FC)
     arcpy.GraphicBuffer_analysis(OPENINGS_FC, NEG_BUFFERED_FC, NEG_BUFFER)
     
     
-    print ("Calculating points")
-    start_time = datetime.now()    
-    with arcpy.da.SearchCursor(NEG_BUFFERED_FC, ['OBJECTID', 'SHAPE@']) as cursor:
+    logger.debug  ("Calculating points")
+    __print_header ()
+    with arcpy.da.SearchCursor(NEG_BUFFERED_FC, ['ORIG_FID', 'SHAPE@']) as cursor:
         for attrs in cursor:
             times[0] = datetime.now()
+            oid = attrs[0]
             polygon = attrs[1]
             x_min, y_min, x_max, y_max = polygon.extent.XMin, polygon.extent.YMin, polygon.extent.XMax, polygon.extent.YMax 
 
@@ -98,27 +103,35 @@ def run ():
                         for c in range (0, mask_col_dim):
                             p = __mask_to_point (r, c, nw_corner)
                             cursor.insertRow([__mask_to_point (r, c, nw_corner), mask[r][c], r, c, p.X, p.Y, mask_row_dim])
-            __print_times (times, mask_row_dim*mask_col_dim, len(points), len(plantings), times_totals)
 
-    __print_totals (times_totals)
+            __print_stats (polygon, oid, times, mask_row_dim*mask_col_dim, len(points), len(plantings), stats_totals)
+
+    __print_totals (stats_totals)
 
 
-def __print_times (times, mask_size, potential_sites, plantings, times_totals):
+
+def __print_header ():
+    logger.info  ("{:>12s} {:>6s} {:>6s} {:>6s} {:>6s} {:>10s} {:>10s} {:>10s} {:>10s}".format('OID', 'SqMtrs', 'Grid', 'Points', 'Plants', 'Time 1', 'Time 2', 'Time 3', 'Time ttl'))
+    logger.info  ('--------------------')
+
+
+def __print_stats (polygon, oid, times, mask_size, potential_sites, plantings, stats_totals):
     d_1 = (times[1]-times[0]).seconds + (times[1]-times[0]).microseconds / 1000000.0
     d_2 = (times[2]-times[1]).seconds + (times[2]-times[1]).microseconds / 1000000.0
     d_3 = (times[3]-times[2]).seconds + (times[3]-times[2]).microseconds / 1000000.0
+    d_4 = (times[3]-times[0]).seconds + (times[3]-times[0]).microseconds / 1000000.0
+    size = round(polygon.getArea('GEODESIC', 'SQUAREMETERS'))
+    s = [size, mask_size, potential_sites, plantings, d_1, d_2, d_3, d_4]
 
-    print ("{:<12s} {:>6d} {:>6d} {:>6d} {:>10.3f} {:>10.3f} {:>10.3f}".format(datetime.now().strftime('%H:%M:%S.%f')[:-3], mask_size, potential_sites, plantings, d_1, d_2, d_3))
-    times_totals[0] = times_totals[0] + mask_size
-    times_totals[1] = times_totals[1] + potential_sites
-    times_totals[2] = times_totals[2] + plantings
-    times_totals[3] = times_totals[3] + d_1
-    times_totals[4] = times_totals[4] + d_2
-    times_totals[5] = times_totals[5] + d_3
+    logger.info  ("{:>12d} {:>6d} {:>6d} {:>6d} {:>6d} {:>10.3f} {:>10.3f} {:>10.3f} {:>10.3f}".format(oid, *s))
+
+    for i in range (len(stats_totals)):
+        stats_totals[i] = stats_totals[i] + s[i]
+   
     
-def __print_totals (t):
-    print ('--------------------')
-    print ("{:<12s} {:>6d} {:>6d} {:>6d} {:>10.3f} {:>10.3f} {:>10.3f}".format(datetime.now().strftime('%H:%M:%S.%f')[:-3], t[0], t[1], t[2], t[3], t[4], t[5]))
+def __print_totals (stats_totals):
+    logger.info  ('--------------------')
+    logger.info  ("{:>12s} {:>6d} {:>6d} {:>6d} {:>6d} {:>10.3f} {:>10.3f} {:>10.3f} {:>10.3f}".format('', *stats_totals))
     
 
 
