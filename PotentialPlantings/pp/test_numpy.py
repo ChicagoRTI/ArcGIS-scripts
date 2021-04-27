@@ -5,6 +5,10 @@ import arcpy
 import os
 import math
 import numpy as np
+from datetime import datetime
+
+
+WRITE_TO_DEBUG_MASK_FC = True
 
 
 #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\data\test.gdb\opening_single'
@@ -12,7 +16,7 @@ OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\data\te
 NEG_BUFFERED_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\data\test.gdb\NEG_BUFFERed'
 MATRIX_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\data\test.gdb\matrix'
 MASK_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\data\test.gdb\mask'
-MIN_DIAMETER = 5 * 0.3048
+MIN_DIAMETER = 10 * 0.3048
 NEG_BUFFER = - (10 * 0.3048)
 
 
@@ -27,11 +31,12 @@ OUTSIDE_POLYGON = 101
 CANOPY = 102
 
 
-TREE_CATEGORIES = [BIG, SMALL]
+TREE_CATEGORIES = [BIG, MEDIUM, SMALL]
 
 # This is the footprint dimension of each tree catetory. It is a multiple of 
 # the MIN_DIAMETER and must be an odd number
-TREE_FOOTPRINT_DIM = {SMALL:  3,
+TREE_FOOTPRINT_DIM = {SMALL:  1,
+                      MEDIUM: 3,
                       BIG:    5}
 
 def run ():
@@ -53,14 +58,15 @@ def run ():
             center = arcpy.Point((x_min+x_max)/2, (y_min+y_max)/2)
             tiers = math.ceil(max((x_max-x_min)/2, (y_max-y_min)/2) / MIN_DIAMETER)
             
+            # The mask orgin is the NW corner and indexed row major as  [row][col]
             mask_row_dim, mask_col_dim = __get_mask_dim (polygon, center, tiers)
-            mask = np.empty( (mask_row_dim, mask_col_dim), dtype=int)
+            mask = np.empty( (mask_row_dim, mask_col_dim), dtype=np.uint8)
+
+
+            print("%s: %i potential planting sites" % (datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S.%f')[:-3], mask_row_dim*mask_col_dim))
 
             nw_corner = arcpy.Point (center.X - (mask_col_dim*MIN_DIAMETER)/2, center.Y + (mask_row_dim*MIN_DIAMETER)/2)            
             center_row, center_col = __point_to_mask (center, nw_corner)
-            
-            # The mask orgin is the NW corner and indexed row major as  [row][col]
-            mask_row_dim, mask_col_dim = __get_mask_dim (polygon, center, tiers)
 
             points = __get_points (nw_corner, polygon, mask)
 
@@ -69,7 +75,7 @@ def run ():
                     for row, col in __get_tier_vacancies (center_row, center_col, tier_idx, mask):        
                         fp = __get_footprint (row, col, TREE_FOOTPRINT_DIM[tree_category], mask)
                         if __is_footprint_clean (mask, *fp):                        
-                            __occupy_footprint (mask, points, *fp, row, col, tree_category)
+                            __occupy_footprint (mask, *fp, row, col, tree_category)
 
 
             with arcpy.da.InsertCursor(MATRIX_FC, ['SHAPE@', 'code']) as cursor:
@@ -77,11 +83,12 @@ def run ():
                     cursor.insertRow([points[(row,col)], mask[row][col]])
 
 
-            with arcpy.da.InsertCursor(MASK_FC, ['SHAPE@', 'code', 'row', 'col', 'x', 'y', 'dim']) as cursor:
-                for r in range (0, mask_row_dim):
-                    for c in range (0, mask_col_dim):
-                        p = __mask_to_point (r, c, nw_corner)
-                        cursor.insertRow([__mask_to_point (r, c, nw_corner), mask[r][c], r, c, p.X, p.Y, mask_row_dim])
+            if WRITE_TO_DEBUG_MASK_FC:
+                with arcpy.da.InsertCursor(MASK_FC, ['SHAPE@', 'code', 'row', 'col', 'x', 'y', 'dim']) as cursor:
+                    for r in range (0, mask_row_dim):
+                        for c in range (0, mask_col_dim):
+                            p = __mask_to_point (r, c, nw_corner)
+                            cursor.insertRow([__mask_to_point (r, c, nw_corner), mask[r][c], r, c, p.X, p.Y, mask_row_dim])
 
 
 
@@ -90,7 +97,7 @@ def __get_mask_dim (polygon, center, tiers):
     nw_corner = arcpy.Point (center.X - tiers*MIN_DIAMETER, center.Y + tiers*MIN_DIAMETER)
     rows_outside_extent = 2 * math.floor( (nw_corner.Y - polygon.extent.YMax) / MIN_DIAMETER ) 
     cols_outside_extent = 2 * math.floor( (polygon.extent.XMin - nw_corner.X) / MIN_DIAMETER )     
-    return max_dim - rows_outside_extent, max_dim - cols_outside_extent
+    return max_dim - rows_outside_extent, max_dim - cols_outside_extent  # This does not change the center point
     
 
 def __get_points (nw_corner, polygon, mask):
@@ -112,18 +119,20 @@ def __get_points (nw_corner, polygon, mask):
 def __get_tier_vacancies (center_row, center_col, tier_idx, mask):
     mask_row_dim = mask.shape[0]
     mask_col_dim = mask.shape[1]
-    top  = [(center_row - tier_idx, col)  for col in range (center_col - tier_idx, center_col + tier_idx + 1)]
-    right= [(row, center_col + tier_idx)  for row in range (center_row - tier_idx, center_row + tier_idx + 1)]
-    bot  = [(center_row + tier_idx, col)  for col in reversed(range (center_col - tier_idx, center_col + tier_idx + 1))]
-    left = [(row, center_col - tier_idx)  for row in reversed(range (center_row - tier_idx, center_row + tier_idx + 1))]
-    return [(row,col) for (row,col) in top + right + bot + left if row > 0 and row < mask_row_dim and col > 0 and col < mask_col_dim and mask[row, col] == VACANT]  
+    rows = range(max(0, center_row - tier_idx),  min(center_row + tier_idx+1, mask_row_dim))
+    cols = range(max(0, center_col - tier_idx),  min(center_col + tier_idx+1, mask_col_dim))    
+    top   = [(rows[0], col)  for col in cols           if mask[rows[0], col]  == VACANT]
+    right = [(row, cols[-1]) for row in rows           if mask[row, cols[-1]] == VACANT]
+    bot   = [(rows[-1], col) for col in reversed(cols) if mask[rows[-1], col] == VACANT]
+    left  = [(row, cols[0])  for row in reversed(rows) if mask[row, cols[0]]  == VACANT]
+    return top + right + bot + left  
 
-                     
-    
+                        
 def __mask_to_point (row, col, nw_corner):
     x = nw_corner.X + col*MIN_DIAMETER
     y = nw_corner.Y - row*MIN_DIAMETER
     return arcpy.Point(x,y)
+
 
 def __point_to_mask (point, nw_corner):
     row = math.floor( (nw_corner.Y - point.Y) / MIN_DIAMETER)
@@ -144,12 +153,12 @@ def __get_footprint (row, col, tree_footprint_dim, mask):
 def __is_footprint_clean (mask, fp_row, fp_col, fp_row_dim, fp_col_dim):    
     for r in range (fp_row, fp_row + fp_row_dim):
         for c in range (fp_col, fp_col + fp_col_dim):
-            if mask[r][c] != VACANT:
+            if mask[r][c] != VACANT and mask[r][c] != OUTSIDE_POLYGON:
                 return False
     return True
 
 
-def __occupy_footprint (mask, points, fp_row, fp_col, fp_row_dim, fp_col_dim, planting_row, planting_col, tree_category):
+def __occupy_footprint (mask, fp_row, fp_col, fp_row_dim, fp_col_dim, planting_row, planting_col, tree_category):
     for r in range (fp_row, fp_row + fp_row_dim):
         for c in range (fp_col, fp_col + fp_col_dim):
             mask[r][c] = CANOPY
