@@ -13,7 +13,7 @@ logger = pp.logger.logger.get('pp_log')
 
 WRITE_TO_DEBUG_MASK_FC = False
 
-USE_NUMPY = True
+USE_NUMPY = False
 
 
 #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\data\test.gdb\opening_single'
@@ -45,8 +45,8 @@ TREE_FOOTPRINT_DIM = {SMALL:  1,
 def run ():
     logger.info ("Logging to %s" % pp.logger.logger.LOG_FILE)
     logger.debug  ("Using numpy? %s" % str(USE_NUMPY))    
-    times = [0,0,0,0]    
-    stats_totals = [0,0,0,0,0,0,0,0]             
+    times = [0,0,0]    
+    stats_totals = [0,0,0,0,0,0,0]             
                 
     arcpy.management.DeleteFeatures(MATRIX_FC)
     arcpy.management.DeleteFeatures(MASK_FC)
@@ -80,7 +80,6 @@ def run ():
 
             points = dict()
             
-            times[1] = datetime.now()
             for tree_category in TREE_CATEGORIES: 
                 for tier_idx in range(0, tiers+1):
                     for row, col in __get_tier_vacancies (center_row, center_col, tier_idx, mask):        
@@ -88,14 +87,14 @@ def run ():
                         if __is_footprint_clean (mask, *fp):  
                             if is_point_in_polygon (row, col, polygon, nw_corner, mask, points):
                                 __occupy_footprint (mask, *fp, row, col, tree_category)
-            times[2] = datetime.now()
+            times[1] = datetime.now()
 
 
             with arcpy.da.InsertCursor(MATRIX_FC, ['SHAPE@', 'code']) as cursor:
                 plantings = [(r,c) for r,c in points.keys() if mask[r][c] <= BIG]
                 for row,col in plantings:
                     cursor.insertRow([points[(row,col)], mask[row][col]])
-            times[3] = datetime.now()
+            times[2] = datetime.now()
 
 
             if WRITE_TO_DEBUG_MASK_FC:
@@ -112,19 +111,18 @@ def run ():
 
 
 def __print_header ():
-    logger.info  ("{:>12s} {:>6s} {:>6s} {:>6s} {:>6s} {:>10s} {:>10s} {:>10s} {:>10s}".format('OID', 'SqMtrs', 'Grid', 'Points', 'Plants', 'Time 1', 'Time 2', 'Time 3', 'Time ttl'))
+    logger.info  ("{:>12s} {:>6s} {:>6s} {:>6s} {:>6s} {:>10s} {:>10s} {:>10s}".format('OID', 'SqMtrs', 'Grid', 'Points', 'Plants', 'Time 1', 'Time 2', 'Time ttl'))
     logger.info  ('--------------------')
 
 
 def __print_stats (polygon, oid, times, mask_size, potential_sites, plantings, stats_totals):
     d_1 = (times[1]-times[0]).seconds + (times[1]-times[0]).microseconds / 1000000.0
     d_2 = (times[2]-times[1]).seconds + (times[2]-times[1]).microseconds / 1000000.0
-    d_3 = (times[3]-times[2]).seconds + (times[3]-times[2]).microseconds / 1000000.0
-    d_4 = (times[3]-times[0]).seconds + (times[3]-times[0]).microseconds / 1000000.0
+    d_3 = (times[2]-times[0]).seconds + (times[2]-times[0]).microseconds / 1000000.0
     size = round(polygon.getArea('GEODESIC', 'SQUAREMETERS'))
-    s = [size, mask_size, potential_sites, plantings, d_1, d_2, d_3, d_4]
+    s = [size, mask_size, potential_sites, plantings, d_1, d_2, d_3]
 
-    logger.info  ("{:>12d} {:>6d} {:>6d} {:>6d} {:>6d} {:>10.3f} {:>10.3f} {:>10.3f} {:>10.3f}".format(oid, *s))
+    logger.info  ("{:>12d} {:>6d} {:>6d} {:>6d} {:>6d} {:>10.3f} {:>10.3f} {:>10.3f}".format(oid, *s))
 
     for i in range (len(stats_totals)):
         stats_totals[i] = stats_totals[i] + s[i]
@@ -132,7 +130,7 @@ def __print_stats (polygon, oid, times, mask_size, potential_sites, plantings, s
     
 def __print_totals (stats_totals):
     logger.info  ('--------------------')
-    logger.info  ("{:>12s} {:>6d} {:>6d} {:>6d} {:>6d} {:>10.3f} {:>10.3f} {:>10.3f} {:>10.3f}".format('', *stats_totals))
+    logger.info  ("{:>12s} {:>6d} {:>6d} {:>6d} {:>6d} {:>10.3f} {:>10.3f} {:>10.3f}".format('', *stats_totals))
     
 
 
