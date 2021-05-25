@@ -231,6 +231,7 @@ cdef void __get_footprint (int row, int col, int tree_footprint_dim, Mask* m, Fo
 
 
 cdef bint __is_footprint_clean (Mask* m, Footprint* fp):    
+    cdef int r, c
     for r in range (fp.row_origin, fp.row_origin + fp.row_dim):
         for c in range (fp.col_origin, fp.col_origin + fp.col_dim):
             if m.array_[r*m.col_dim + c] != VACANT:
@@ -258,6 +259,7 @@ cdef void __occupy_footprint (Mask * m, Footprint* fp, int planting_row, int pla
         for c in range (fp.col_origin, fp.col_origin + fp.col_dim):
             m.array_[r*m.col_dim + c] = CANOPY
     m.array_[planting_row*m.col_dim + planting_col] = tree_category
+    
 
 
 if __name__ == '__main__':
