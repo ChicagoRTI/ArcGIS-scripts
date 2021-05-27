@@ -18,11 +18,11 @@ WRITE_TO_DEBUG_MASK_FC = False
 USE_NUMPY = False
 
 
-#OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\data\test.gdb\opening_single'
+#OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\opening_single'
 #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\openings'
 #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\campus_parks_projected'
-#OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\chicago_parks'
-OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\lincoln_park'
+OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\chicago_parks'
+#OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\lincoln_park'
 MATRIX_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\matrix'
 MASK_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\mask'
 MIN_DIAMETER = 10 * 0.3048
@@ -48,7 +48,7 @@ TREE_FOOTPRINT_DIM = {SMALL:  1,
 
 
 # Can not run in multiprocessing mode from the Spyder console
-IS_MP = False
+IS_MP = True
 MP_NUM_CHUNKS = 8
 MP_CHUNK_LIST = [(MP_NUM_CHUNKS, i, MATRIX_FC + '_' + str(i)) for i in range(MP_NUM_CHUNKS)]
 
@@ -128,13 +128,17 @@ def run_mp (chunk):
             
             # The mask orgin is the NW corner and indexed row major as  [row][col]
             mask_row_dim, mask_col_dim = __get_mask_dim (polygon, center, tiers)
-            if USE_NUMPY:
-                mask = np.full( (mask_row_dim, mask_col_dim), VACANT, dtype=np.uint8)
-            else:
-                mask = [m[:] for m in [[VACANT] * mask_col_dim] * mask_row_dim] 
-
             nw_corner = arcpy.Point (center.X - (mask_col_dim*MIN_DIAMETER)/2, center.Y + (mask_row_dim*MIN_DIAMETER)/2)            
             center_row, center_col = __point_to_mask (center, nw_corner)
+
+            mask = __get_mask (mask_row_dim, mask_col_dim, polygon, nw_corner)
+            
+            # if USE_NUMPY:
+            #     mask = np.full( (mask_row_dim, mask_col_dim), VACANT, dtype=np.uint8)
+            # elif mask_row_dim * mask_col_dim > 0:
+            #     mask = [m[:] for m in [[VACANT] * mask_col_dim] * mask_row_dim] 
+            # else: 
+            #     mask = __big_space (mask_row_dim, mask_col_dim, polygon, arcpy.Describe(OPENINGS_FC).spatialReference, nw_corner)
 
             points = dict()
             
@@ -178,7 +182,7 @@ def __print_stats (polygon, oid, times, mask_size, potential_sites, plantings, s
     d_1 = (times[1]-times[0]).seconds + (times[1]-times[0]).microseconds / 1000000.0
     d_2 = (times[2]-times[1]).seconds + (times[2]-times[1]).microseconds / 1000000.0
     d_3 = (times[2]-times[0]).seconds + (times[2]-times[0]).microseconds / 1000000.0
-    size = round(polygon.getArea('GEODESIC', 'SQUAREMETERS'))
+    size = round(polygon.getArea('PLANAR', 'SQUAREMETERS'))
     s = [size, mask_size, potential_sites, plantings, d_1, d_2, d_3]
 
     logger.info  ("{:>2d} {:>12d} {:>8d} {:>8d} {:>6d} {:>6d} {:>10.3f} {:>10.3f} {:>10.3f}".format(my_chunk, oid, *s))
@@ -234,7 +238,7 @@ def __get_footprint (row, col, tree_footprint_dim, mask_row_dim, mask_col_dim):
 def __is_footprint_clean (mask, fp_row, fp_col, fp_row_dim, fp_col_dim):    
     for r in range (fp_row, fp_row + fp_row_dim):
         for c in range (fp_col, fp_col + fp_col_dim):
-            if mask[r][c] != VACANT:
+            if mask[r][c] != VACANT and mask[r][c] != OUTSIDE_POLYGON:
                 return False
     return True
 
@@ -258,6 +262,133 @@ def __occupy_footprint (mask, fp_row, fp_col, fp_row_dim, fp_col_dim, planting_r
         for c in range (fp_col, fp_col + fp_col_dim):
             mask[r][c] = CANOPY
     mask[planting_row][planting_col] = tree_category
+
+
+
+
+def __get_mask (mask_row_dim, mask_col_dim, polygon, nw_corner):
+    
+    # if USE_NUMPY:
+    #     mask = np.full( (mask_row_dim, mask_col_dim), VACANT, dtype=np.uint8)
+    # elif mask_row_dim * mask_col_dim < 0:
+    #     mask = [m[:] for m in [[VACANT] * mask_col_dim] * mask_row_dim] 
+    # else: 
+        
+    ma = __get_mask_algorithm (mask_row_dim, mask_col_dim, polygon)
+    if ma == 0:
+         mask = [m[:] for m in [[VACANT] * mask_col_dim] * mask_row_dim] 
+    else:         
+        # Lincoln park take  160 minutes vs 4 minutes with this algorithm    
+        FISHNET_POLYLINE_FC = os.path.join('in_memory', 'fishnet_polyline')
+        FISHNET_POINT_FC = FISHNET_POLYLINE_FC + '_label' 
+        POLYGON_FC = os.path.join('in_memory', 'polygon')
+        INTERSECT_FC = os.path.join('in_memory', 'intersect')
+        
+        x_min = nw_corner.X
+        y_min = nw_corner.Y - (mask_row_dim * MIN_DIAMETER)
+        x_max = nw_corner.X + (mask_col_dim * MIN_DIAMETER) 
+        y_max = nw_corner.Y 
+    
+        arcpy.env.outputCoordinateSystem = arcpy.Describe(OPENINGS_FC).spatialReference
+               
+        logger.debug ('Creating fishnet: %i' % (mask_row_dim*mask_col_dim))
+        arcpy.management.CreateFishnet(FISHNET_POLYLINE_FC, 
+                                       '%f %f' % (x_min, y_min), 
+                                       '%f %f' % (x_min, y_max), 
+                                       None, 
+                                       None, 
+                                       mask_row_dim, 
+                                       mask_col_dim, 
+                                       '%f %f' % (x_max, y_max), 
+                                       'LABELS', 
+                                       '#', 
+                                       'POLYLINE')
+    
+        # Create feature class with the input polygon
+        logger.debug ('Creating feature class')
+        arcpy.CreateFeatureclass_management(os.path.dirname(POLYGON_FC), os.path.basename(POLYGON_FC), "POLYGON", OPENINGS_FC)
+        
+        with arcpy.da.InsertCursor(POLYGON_FC, ['SHAPE@']) as cursor:
+            cursor.insertRow([polygon])
+    
+        # Get the points within the polygon
+        logger.debug ('Intersecting')
+        arcpy.analysis.PairwiseIntersect([POLYGON_FC, FISHNET_POINT_FC], INTERSECT_FC)
+    
+        logger.debug ('Writing results')
+        # Initialize the mask
+        mask = [m[:] for m in [[OUTSIDE_POLYGON] * mask_col_dim] * mask_row_dim]     
+        with arcpy.da.SearchCursor(INTERSECT_FC, ['SHAPE@']) as cursor:
+            for attrs in cursor:
+                row, col = __point_to_mask (attrs[0].centroid, nw_corner)
+                mask[row][col] = VACANT
+    
+        logger.debug ('Deleting temp feature classes')
+        arcpy.management.Delete(FISHNET_POLYLINE_FC)
+        arcpy.management.Delete(FISHNET_POINT_FC)
+        arcpy.management.Delete(POLYGON_FC)
+        arcpy.management.Delete(INTERSECT_FC)
+    
+        logger.debug ('Done')
+
+    return mask
+
+
+def __get_mask_algorithm (mask_row_dim, mask_col_dim, polygon):
+    threshold_1 = 100000
+    threshold_2 = 1000000
+    
+    polygon_sq_meters = round(polygon.getArea('PLANAR', 'SQUAREMETERS')) 
+    mask_sq_meters = mask_row_dim * mask_col_dim * MIN_DIAMETER * MIN_DIAMETER
+
+    if mask_sq_meters < threshold_1:
+        return 0
+    elif mask_sq_meters > threshold_2:
+        return 1
+    else:
+        percent_polygon = (polygon_sq_meters/mask_sq_meters) * 100
+        precent_gap = (mask_sq_meters - threshold_1)/(threshold_2 - threshold_1) * 100
+        if percent_polygon > precent_gap:
+            return 0
+        else:
+            return 1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+    
 
 
 if __name__ == '__main__':
