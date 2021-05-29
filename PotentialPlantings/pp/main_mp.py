@@ -4,8 +4,6 @@
 import arcpy
 import os
 import math
-import numpy as np
-# from datetime import datetime
 import multiprocessing
 import timeit
 
@@ -15,10 +13,10 @@ import pp.logger.logger
 logger = pp.logger.logger.get('pp_log')
 
 
+# Can not run in multiprocessing mode from the Spyder console
+IS_MP = True
+MP_NUM_CHUNKS = 8
 WRITE_TO_DEBUG_MASK_FC = False
-
-USE_NUMPY = False
-
 
 #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\opening_single'
 #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\openings'
@@ -39,6 +37,8 @@ VACANT = 100
 OUTSIDE_POLYGON = 101
 CANOPY = 102
 
+MESH_ALGORITHM_SMALL = 0
+MESH_ALGORITHM_BIG = 1
 
 TREE_CATEGORIES = [BIG, MEDIUM, SMALL]
 
@@ -48,11 +48,6 @@ TREE_FOOTPRINT_DIM = {SMALL:  1,
                       MEDIUM: 3,
                       BIG:    5}
 
-
-# Can not run in multiprocessing mode from the Spyder console
-IS_MP = True
-MP_NUM_CHUNKS = 8
-MP_CHUNK_LIST = [(MP_NUM_CHUNKS, i, MATRIX_FC + '_' + str(i)) for i in range(MP_NUM_CHUNKS)]
 
 
 def run():
@@ -65,14 +60,15 @@ def run():
         StatsAccumulator.log_header()
 
         # Create the set of tuples - each worker process gets one tuple for input        
+        mp_chunk_list = [(MP_NUM_CHUNKS, i, MATRIX_FC + '_' + str(i)) for i in range(MP_NUM_CHUNKS)]
         for i in range(MP_NUM_CHUNKS):
-            chunk_fc = MP_CHUNK_LIST[i][2]
+            chunk_fc = mp_chunk_list[i][2]
             arcpy.Delete_management(chunk_fc)
             arcpy.management.CreateFeatureclass(os.path.dirname(chunk_fc), os.path.basename(chunk_fc), 'POINT', MATRIX_FC)
             logger.debug('Created output feature class %s ' % chunk_fc)
  
         p = multiprocessing.Pool(MP_NUM_CHUNKS)
-        process_stats = p.map(run_mp, MP_CHUNK_LIST)
+        process_stats = p.map(run_mp, mp_chunk_list)
         p.close()
         
         logger.info('')
@@ -87,28 +83,25 @@ def run():
             
         # Reassemble the feature classes
         for i in range(MP_NUM_CHUNKS):
-            chunk_fc = MP_CHUNK_LIST[i][2]
+            chunk_fc = mp_chunk_list[i][2]
             logger.debug('Appending ' + chunk_fc + ' to ' + MATRIX_FC)
             arcpy.Append_management(chunk_fc, MATRIX_FC)
             
-
     else:
         StatsAccumulator.log_header()
         process_stats = run_mp ( (1, 0, MATRIX_FC) )
         process_stats.log_accumulation(0)
 
     
-    logger.info("Program Executed in %s seconds" % str(timeit.default_timer()-start_time)) 
+    logger.info("Program Executed in %s seconds" % str(round(timeit.default_timer()-start_time)))
 
 
 def run_mp (chunk):    
     chunks, my_chunk, output_fc = chunk
     
     logger.debug ("Chunk %i of %i. Output will be written to %s" % (my_chunk+1, chunks, output_fc))
-    
-    logger.debug  ("Using numpy? %s" % str(USE_NUMPY))    
-           
-                
+  
+                          
     if WRITE_TO_DEBUG_MASK_FC:
         arcpy.management.DeleteFeatures(MASK_FC)
         
@@ -133,13 +126,6 @@ def run_mp (chunk):
             mask = __get_mask (mask_row_dim, mask_col_dim, polygon, nw_corner)
             feature_stats.record(StatsTimer.MESH_CREATE_END)
             
-            # if USE_NUMPY:
-            #     mask = np.full( (mask_row_dim, mask_col_dim), VACANT, dtype=np.uint8)
-            # elif mask_row_dim * mask_col_dim > 0:
-            #     mask = [m[:] for m in [[VACANT] * mask_col_dim] * mask_row_dim] 
-            # else: 
-            #     mask = __big_space (mask_row_dim, mask_col_dim, polygon, arcpy.Describe(OPENINGS_FC).spatialReference, nw_corner)
-
             points = dict()
             
             for tree_category in TREE_CATEGORIES: 
@@ -168,29 +154,6 @@ def run_mp (chunk):
 
     return process_stats
 
-
-
-# def __print_header ():
-#     logger.info  ("{:>2s} {:>12s} {:>8s} {:>8s} {:>6s} {:>6s} {:>10s} {:>10s} {:>10s}".format('Pr', 'OID', 'SqMtrs', 'Grid', 'Points', 'Plants', 'Time 1', 'Time 2', 'Time ttl'))
-#     logger.info  ('--------------------')
-
-
-# def __print_stats (polygon, oid, times, mask_size, potential_sites, plantings, stats_totals, my_chunk):
-#     d_1 = (times[1]-times[0]).seconds + (times[1]-times[0]).microseconds / 1000000.0
-#     d_2 = (times[2]-times[1]).seconds + (times[2]-times[1]).microseconds / 1000000.0
-#     d_3 = (times[2]-times[0]).seconds + (times[2]-times[0]).microseconds / 1000000.0
-#     size = round(polygon.getArea('PLANAR', 'SQUAREMETERS'))
-#     s = [size, mask_size, potential_sites, plantings, d_1, d_2, d_3]
-
-#     logger.info  ("{:>2d} {:>12d} {:>8d} {:>8d} {:>6d} {:>6d} {:>10.3f} {:>10.3f} {:>10.3f}".format(my_chunk, oid, *s))
-
-#     for i in range (len(stats_totals)):
-#         stats_totals[i] = stats_totals[i] + s[i]
-   
-    
-# def __print_totals (stats_totals, my_chunk):
-#     logger.info  ("{:>2d} {:>12s} {:>8d} {:>8d} {:>6d} {:>6d} {:>10.3f} {:>10.3f} {:>10.3f}".format(my_chunk, '', *stats_totals))
-    
 
 
 def __get_mask_dim (polygon, center, tiers):
@@ -265,16 +228,10 @@ def __occupy_footprint (mask, fp_row, fp_col, fp_row_dim, fp_col_dim, planting_r
 
 def __get_mask (mask_row_dim, mask_col_dim, polygon, nw_corner):
     
-    # if USE_NUMPY:
-    #     mask = np.full( (mask_row_dim, mask_col_dim), VACANT, dtype=np.uint8)
-    # elif mask_row_dim * mask_col_dim < 0:
-    #     mask = [m[:] for m in [[VACANT] * mask_col_dim] * mask_row_dim] 
-    # else: 
-        
     ma = __get_mask_algorithm (mask_row_dim, mask_col_dim, polygon)
-    if ma == 0:
+    if ma == MESH_ALGORITHM_SMALL:
          mask = [m[:] for m in [[VACANT] * mask_col_dim] * mask_row_dim] 
-    else:         
+    elif ma == MESH_ALGORITHM_BIG:         
         # Lincoln park take  160 minutes vs 4 minutes with this algorithm    
         FISHNET_POLYLINE_FC = os.path.join('in_memory', 'fishnet_polyline')
         FISHNET_POINT_FC = FISHNET_POLYLINE_FC + '_label' 
@@ -339,16 +296,16 @@ def __get_mask_algorithm (mask_row_dim, mask_col_dim, polygon):
     mask_sq_meters = mask_row_dim * mask_col_dim * MIN_DIAMETER * MIN_DIAMETER
 
     if mask_sq_meters < threshold_1:
-        return 0
+        return MESH_ALGORITHM_SMALL
     elif mask_sq_meters > threshold_2:
-        return 1
+        return MESH_ALGORITHM_BIG
     else:
         percent_polygon = (polygon_sq_meters/mask_sq_meters) * 100
         precent_gap = (mask_sq_meters - threshold_1)/(threshold_2 - threshold_1) * 100
         if percent_polygon > precent_gap:
-            return 0
+            return MESH_ALGORITHM_SMALL
         else:
-            return 1
+            return MESH_ALGORITHM_BIG
 
 
 
