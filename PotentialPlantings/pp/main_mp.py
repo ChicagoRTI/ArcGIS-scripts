@@ -5,10 +5,12 @@ import arcpy
 import os
 import math
 import numpy as np
-from datetime import datetime
+# from datetime import datetime
 import multiprocessing
 import timeit
 
+from pp.stats import StatsAccumulator
+from pp.stats import StatsTimer
 import pp.logger.logger
 logger = pp.logger.logger.get('pp_log')
 
@@ -60,7 +62,7 @@ def run():
     
     if IS_MP:
         logger.info('Launching ' + str(MP_NUM_CHUNKS) + ' worker processes')
-        __print_header ()
+        StatsAccumulator.log_header()
 
         # Create the set of tuples - each worker process gets one tuple for input        
         for i in range(MP_NUM_CHUNKS):
@@ -70,22 +72,19 @@ def run():
             logger.debug('Created output feature class %s ' % chunk_fc)
  
         p = multiprocessing.Pool(MP_NUM_CHUNKS)
-        stats_subtotals = p.map(run_mp, MP_CHUNK_LIST)
+        process_stats = p.map(run_mp, MP_CHUNK_LIST)
         p.close()
         
         logger.info('')
         logger.info('Subtotals')
-        stats_totals = [0 for i in range(len(stats_subtotals[0]))]
+        app_stats = StatsAccumulator()
         for i in range(MP_NUM_CHUNKS):
-            __print_totals (stats_subtotals[i], i)
-            for j in range (len(stats_subtotals[i])):
-                stats_totals[j] = stats_totals[j] + stats_subtotals[i][j]                                      
+            process_stats[i].log_accumulation(i)
+            app_stats.add(process_stats[i])
         logger.info('')
         logger.info('Totals')
-        __print_header ()
-        __print_totals (stats_totals, -1)
-        
-                
+        app_stats.log_accumulation(-1)           
+            
         # Reassemble the feature classes
         for i in range(MP_NUM_CHUNKS):
             chunk_fc = MP_CHUNK_LIST[i][2]
@@ -94,31 +93,31 @@ def run():
             
 
     else:
-        __print_header ()
-        s = run_mp ( (1, 0, MATRIX_FC) )
-        __print_totals (s, 0)
+        StatsAccumulator.log_header()
+        process_stats = run_mp ( (1, 0, MATRIX_FC) )
+        process_stats.log_accumulation(0)
+
     
     logger.info("Program Executed in %s seconds" % str(timeit.default_timer()-start_time)) 
 
 
-def run_mp (chunk):
-#    logger.info ("Logging to %s" % pp.logger.logger.LOG_FILE)
-    
+def run_mp (chunk):    
     chunks, my_chunk, output_fc = chunk
     
     logger.debug ("Chunk %i of %i. Output will be written to %s" % (my_chunk+1, chunks, output_fc))
     
     logger.debug  ("Using numpy? %s" % str(USE_NUMPY))    
-    times = [0,0,0]    
-    stats_totals = [0,0,0,0,0,0,0]             
+           
                 
     if WRITE_TO_DEBUG_MASK_FC:
         arcpy.management.DeleteFeatures(MASK_FC)
-    
+        
+    process_stats = StatsAccumulator()
+        
     logger.debug  ("Calculating points")
     with arcpy.da.SearchCursor(OPENINGS_FC, ['OBJECTID', 'SHAPE@'], "(MOD(OBJECTID,%i) - %i = 0)" % (chunks, my_chunk)) as cursor:
         for attrs in cursor:
-            times[0] = datetime.now()
+            feature_stats = StatsTimer()
             oid = attrs[0]
             polygon = attrs[1]
             x_min, y_min, x_max, y_max = polygon.extent.XMin, polygon.extent.YMin, polygon.extent.XMax, polygon.extent.YMax 
@@ -132,6 +131,7 @@ def run_mp (chunk):
             center_row, center_col = __point_to_mask (center, nw_corner)
 
             mask = __get_mask (mask_row_dim, mask_col_dim, polygon, nw_corner)
+            feature_stats.record(StatsTimer.MESH_CREATE_END)
             
             # if USE_NUMPY:
             #     mask = np.full( (mask_row_dim, mask_col_dim), VACANT, dtype=np.uint8)
@@ -149,14 +149,14 @@ def run_mp (chunk):
                         if __is_footprint_clean (mask, *fp):  
                             if is_point_in_polygon (row, col, polygon, nw_corner, mask, points):
                                 __occupy_footprint (mask, *fp, row, col, tree_category)
-            times[1] = datetime.now()
-
+            feature_stats.record(StatsTimer.FIND_SITES_END)
 
             with arcpy.da.InsertCursor(output_fc, ['SHAPE@', 'code']) as cursor:
                 plantings = [(r,c) for r,c in points.keys() if mask[r][c] <= BIG]
                 for row,col in plantings:
                     cursor.insertRow([points[(row,col)], mask[row][col]])
-            times[2] = datetime.now()
+            feature_stats.record(StatsTimer.WRITE_SITES_END)
+            process_stats.accumulate (feature_stats, my_chunk, oid, mask_row_dim * mask_col_dim * MIN_DIAMETER * MIN_DIAMETER, polygon.getArea('PLANAR', 'SQUAREMETERS'), len(plantings))
 
 
             if WRITE_TO_DEBUG_MASK_FC:
@@ -166,33 +166,30 @@ def run_mp (chunk):
                             p = __mask_to_point (r, c, nw_corner)
                             cursor.insertRow([p, mask[r][c], r, c, p.X, p.Y, mask_row_dim])
 
-            __print_stats (polygon, oid, times, mask_row_dim*mask_col_dim, len(points), len(plantings), stats_totals, my_chunk)
-
-#    __print_totals (stats_totals)
-    return stats_totals
+    return process_stats
 
 
 
-def __print_header ():
-    logger.info  ("{:>2s} {:>12s} {:>8s} {:>8s} {:>6s} {:>6s} {:>10s} {:>10s} {:>10s}".format('Pr', 'OID', 'SqMtrs', 'Grid', 'Points', 'Plants', 'Time 1', 'Time 2', 'Time ttl'))
-    logger.info  ('--------------------')
+# def __print_header ():
+#     logger.info  ("{:>2s} {:>12s} {:>8s} {:>8s} {:>6s} {:>6s} {:>10s} {:>10s} {:>10s}".format('Pr', 'OID', 'SqMtrs', 'Grid', 'Points', 'Plants', 'Time 1', 'Time 2', 'Time ttl'))
+#     logger.info  ('--------------------')
 
 
-def __print_stats (polygon, oid, times, mask_size, potential_sites, plantings, stats_totals, my_chunk):
-    d_1 = (times[1]-times[0]).seconds + (times[1]-times[0]).microseconds / 1000000.0
-    d_2 = (times[2]-times[1]).seconds + (times[2]-times[1]).microseconds / 1000000.0
-    d_3 = (times[2]-times[0]).seconds + (times[2]-times[0]).microseconds / 1000000.0
-    size = round(polygon.getArea('PLANAR', 'SQUAREMETERS'))
-    s = [size, mask_size, potential_sites, plantings, d_1, d_2, d_3]
+# def __print_stats (polygon, oid, times, mask_size, potential_sites, plantings, stats_totals, my_chunk):
+#     d_1 = (times[1]-times[0]).seconds + (times[1]-times[0]).microseconds / 1000000.0
+#     d_2 = (times[2]-times[1]).seconds + (times[2]-times[1]).microseconds / 1000000.0
+#     d_3 = (times[2]-times[0]).seconds + (times[2]-times[0]).microseconds / 1000000.0
+#     size = round(polygon.getArea('PLANAR', 'SQUAREMETERS'))
+#     s = [size, mask_size, potential_sites, plantings, d_1, d_2, d_3]
 
-    logger.info  ("{:>2d} {:>12d} {:>8d} {:>8d} {:>6d} {:>6d} {:>10.3f} {:>10.3f} {:>10.3f}".format(my_chunk, oid, *s))
+#     logger.info  ("{:>2d} {:>12d} {:>8d} {:>8d} {:>6d} {:>6d} {:>10.3f} {:>10.3f} {:>10.3f}".format(my_chunk, oid, *s))
 
-    for i in range (len(stats_totals)):
-        stats_totals[i] = stats_totals[i] + s[i]
+#     for i in range (len(stats_totals)):
+#         stats_totals[i] = stats_totals[i] + s[i]
    
     
-def __print_totals (stats_totals, my_chunk):
-    logger.info  ("{:>2d} {:>12s} {:>8d} {:>8d} {:>6d} {:>6d} {:>10.3f} {:>10.3f} {:>10.3f}".format(my_chunk, '', *stats_totals))
+# def __print_totals (stats_totals, my_chunk):
+#     logger.info  ("{:>2d} {:>12s} {:>8d} {:>8d} {:>6d} {:>6d} {:>10.3f} {:>10.3f} {:>10.3f}".format(my_chunk, '', *stats_totals))
     
 
 
