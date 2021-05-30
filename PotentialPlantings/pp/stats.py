@@ -57,9 +57,12 @@ class StatsAccumulator:
 
 
     @staticmethod
-    def log_header ():
-        logger.info  ("{:>2s} {:>12s} {:>8s} {:>8s} {:>6s} {:>10s} {:>10s} {:>10s} {:>10s}".format('Pr', 'OID', 'Mesh', 'Polygon', 'Plants', 't_Mesh', 't_Plant', 't_Write', 't_Ttl'))
+    def log_header (desc):
+        logger.info  ('')
+        logger.info  (desc)
         logger.info  ('--------------------')
+        logger.info  ("{:>2s} {:>12s} {:>8s} {:>8s} {:>6s} {:>10s} {:>10s} {:>10s} {:>10s}".format('Pr', 'OID', 'Mesh', 'Polygon', 'Plants', 't_Mesh', 't_Plant', 't_Write', 't_Ttl'))
+
         
 
     

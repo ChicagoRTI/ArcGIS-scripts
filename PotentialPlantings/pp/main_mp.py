@@ -14,14 +14,14 @@ logger = pp.logger.logger.get('pp_log')
 
 
 # Can not run in multiprocessing mode from the Spyder console
-IS_MP = False
-MP_NUM_CHUNKS = 2
+IS_MP = True
+MP_NUM_CHUNKS = 8
 WRITE_TO_DEBUG_MESH_FC = False
 
 #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\opening_single'
-OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\openings'
+#OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\openings'
 #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\campus_parks_projected'
-#OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\chicago_parks'
+OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\chicago_parks'
 #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\lincoln_park'
 PLANTS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\plants'
 MESH_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\mesh'
@@ -55,7 +55,7 @@ def run():
     
     if IS_MP:
         logger.info('Launching ' + str(MP_NUM_CHUNKS) + ' worker processes')
-        StatsAccumulator.log_header()
+        StatsAccumulator.log_header('Feature statistics')
 
         # Create the set of tuples - each worker process gets one tuple for input        
         mp_chunk_list = [(MP_NUM_CHUNKS, i, PLANTS_FC + '_' + str(i)) for i in range(MP_NUM_CHUNKS)]
@@ -69,14 +69,12 @@ def run():
         process_stats = p.map(run_mp, mp_chunk_list)
         p.close()
         
-        logger.info('')
-        logger.info('Subtotals')
+        StatsAccumulator.log_header('Process statistics')
         app_stats = StatsAccumulator()
         for i in range(MP_NUM_CHUNKS):
             process_stats[i].log_accumulation(i)
             app_stats.add(process_stats[i])
-        logger.info('')
-        logger.info('Totals')
+        StatsAccumulator.log_header('Totals')
         app_stats.log_accumulation(-1)           
             
         # Reassemble the feature classes
@@ -86,8 +84,9 @@ def run():
             arcpy.Append_management(chunk_fc, PLANTS_FC)
             
     else:
-        StatsAccumulator.log_header()
+        StatsAccumulator.log_header('Feature statistics')
         process_stats = run_mp ( (1, 0, PLANTS_FC) )
+        StatsAccumulator.log_header('Totals')
         process_stats.log_accumulation(0)
 
     
