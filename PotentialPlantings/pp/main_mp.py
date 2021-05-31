@@ -15,15 +15,26 @@ logger = pp.logger.logger.get('pp_log')
 
 
 # Can not run in multiprocessing mode from the Spyder console
-IS_MP = True
+IS_MP = False
 MP_NUM_CHUNKS = 8
 WRITE_TO_DEBUG_MESH_FC = False
 
-#OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\opening_single'
-#OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\openings'
-#OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\campus_parks_projected'
-OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\chicago_parks'
-#OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\lincoln_park'
+#OPENINGS_FC = 'opening_single'
+#OPENINGS_FC = 'openings'
+#OPENINGS_FC = 'campus_parks_projected'
+#OPENINGS_FC = 'chicago_parks_single_tiny'
+#OPENINGS_FC = 'chicago_parks'
+OPENINGS_FC = 'lincoln_park'
+
+
+OPENINGS_FC = os.path.join(r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb', OPENINGS_FC)
+
+# #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\opening_single'
+# OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\openings'
+# #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\campus_parks_projected'
+# #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\chicago_parks_single_tiny'
+# #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\chicago_parks'
+# #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\lincoln_park'
 PLANTS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\plants'
 MESH_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\mesh'
 MIN_DIAMETER = 10 * 0.3048
@@ -76,7 +87,7 @@ def run():
             process_stats[i].log_accumulation(i)
             app_stats.add(process_stats[i])
         StatsAccumulator.log_header('Totals')
-        app_stats.log_accumulation(-1)           
+        app_stats.log_accumulation(None)           
             
         # Reassemble the feature classes
         for i in range(MP_NUM_CHUNKS):
@@ -143,7 +154,7 @@ def run_mp (chunk):
                 for row,col in plant_points.keys():
                     cursor.insertRow([plant_points[(row,col)], mesh[row][col]])
             feature_stats.record(StatsTimer.WRITE_SITES_END)
-            process_stats.accumulate (feature_stats, my_chunk, oid, mesh_row_dim * mesh_col_dim * MIN_DIAMETER * MIN_DIAMETER, polygon.getArea('PLANAR', 'SQUAREMETERS'), len(plant_points))
+            process_stats.accumulate (feature_stats, my_chunk, oid, mesh_row_dim * mesh_col_dim * MIN_DIAMETER * MIN_DIAMETER * 0.000247105, polygon.getArea('PLANAR', 'ACRES'), len(plant_points))
 
 
             if WRITE_TO_DEBUG_MESH_FC and not IS_MP:
@@ -177,8 +188,8 @@ def __get_tier_vacancies (center_row, center_col, tier_idx, mesh, mesh_row_dim, 
 
                         
 def __mesh_to_point (row, col, nw_corner):
-    x = nw_corner.X + col*MIN_DIAMETER
-    y = nw_corner.Y - row*MIN_DIAMETER
+    x = nw_corner.X + col*MIN_DIAMETER + .5*MIN_DIAMETER
+    y = nw_corner.Y - row*MIN_DIAMETER - .5*MIN_DIAMETER
     return arcpy.Point(x,y)
 
 

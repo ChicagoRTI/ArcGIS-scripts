@@ -33,15 +33,15 @@ class StatsAccumulator:
         self.desc = desc
                     
     def accumulate (self, stats_timer, process_id, oid, mesh_sq_meters, polygon_sq_meters, plantings):
-        quantities = [round(mesh_sq_meters),round(polygon_sq_meters), plantings]
+        quantities = [mesh_sq_meters, polygon_sq_meters, plantings]
         ttl_time = sum(stats_timer.times)
-        logger.info  ("{:>2d} {:>12d} {:>8d} {:>8d} {:>6d} {:>10.3f} {:>10.3f} {:>10.3f} {:>10.3f}".format(process_id, oid, *quantities, *stats_timer.times, ttl_time))        
+        acres_per_second = polygon_sq_meters/ttl_time
+        logger.info  ("{:>2s} {:>12s} {:>12.3f} {:>12.3f} {:>9d} {:>10.3f} {:>9.3f} {:>9.3f} {:>10.3f} {:>7.1f}".format(str(process_id), str(oid), *quantities, *stats_timer.times, ttl_time, acres_per_second))        
         for i in range (len(self.times)):
             self.times[i] = self.times[i] + stats_timer.times[i]
         for i in range (len(self.quantities)):
             self.quantities[i] = self.quantities[i] + quantities[i]
         self.t_ttl = self.t_ttl + ttl_time
-
 
     def add (self, stats_accumulator):
         for i in range (len(self.times)):
@@ -52,7 +52,9 @@ class StatsAccumulator:
         
         
     def log_accumulation (self, process_id):
-        logger.info  ("{:>2d} {:>12d} {:>8d} {:>8d} {:>6d} {:>10.3f} {:>10.3f} {:>10.3f} {:>10.3f}".format(process_id, 0, *self.quantities, *self.times, self.t_ttl))        
+        pid = '' if process_id is None else str(process_id)
+        acres_per_second = self.quantities[1]/self.t_ttl
+        logger.info  ("{:>2s} {:>12s} {:>12.3f} {:>12.3f} {:>9d} {:>10.3f} {:>9.3f} {:>9.3f} {:>10.3f} {:>7.1f}".format(pid, '', *self.quantities, *self.times, self.t_ttl, acres_per_second))        
 
 
 
@@ -61,7 +63,8 @@ class StatsAccumulator:
         logger.info  ('')
         logger.info  (desc)
         logger.info  ('--------------------')
-        logger.info  ("{:>2s} {:>12s} {:>8s} {:>8s} {:>6s} {:>10s} {:>10s} {:>10s} {:>10s}".format('Pr', 'OID', 'Mesh', 'Polygon', 'Plants', 't_Mesh', 't_Plant', 't_Write', 't_Ttl'))
+        logger.info  ("{:>2s} {:>12s} {:>12s} {:>12s} {:>9s} {:>10s} {:>9s} {:>9s} {:>10s} {:>7s}".format('',      '', 'Mesh ',  'Polygon', '',       'Mesh   ',  'Plant  ', 'Write  ', 'Total  ', 'Acres/'))
+        logger.info  ("{:>2s} {:>12s} {:>12s} {:>12s} {:>9s} {:>10s} {:>9s} {:>9s} {:>10s} {:>7s}".format('Pr', 'OID', 'Acres',  'Acres  ', 'Plants', 'Seconds',  'Seconds', 'Seconds', 'Seconds', 'Second'))
 
         
 
