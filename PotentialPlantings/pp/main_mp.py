@@ -6,6 +6,7 @@ import os
 import math
 import multiprocessing
 import timeit
+from collections import OrderedDict
 
 from pp.stats import StatsAccumulator
 from pp.stats import StatsTimer
@@ -120,26 +121,29 @@ def run_mp (chunk):
             nw_corner = arcpy.Point (center.X - (mesh_col_dim*MIN_DIAMETER)/2, center.Y + (mesh_row_dim*MIN_DIAMETER)/2)            
             center_row, center_col = __point_to_mesh (center, nw_corner)
 
-            mesh = __get_mesh (mesh_row_dim, mesh_col_dim, polygon, nw_corner)
+            mesh_type = __get_mesh_algorithm (mesh_row_dim, mesh_col_dim, polygon)
+            if mesh_type == MESH_ALGORITHM_SMALL:
+                mesh = [m[:] for m in [[VACANT] * mesh_col_dim] * mesh_row_dim] 
+            elif mesh_type == MESH_ALGORITHM_BIG: 
+                mesh = __get_mesh (mesh_row_dim, mesh_col_dim, polygon, nw_corner)
             feature_stats.record(StatsTimer.MESH_CREATE_END)
             
-            points = dict()
+            plant_points = dict()
             
             for tree_category in TREE_CATEGORIES: 
                 for tier_idx in range(0, tiers+1):
                     for row, col in __get_tier_vacancies (center_row, center_col, tier_idx, mesh, mesh_row_dim, mesh_col_dim):        
                         fp = __get_footprint (row, col, TREE_FOOTPRINT_DIM[tree_category], mesh_row_dim, mesh_col_dim)
                         if __is_footprint_clean (mesh, *fp):  
-                            if is_point_in_polygon (row, col, polygon, nw_corner, mesh, points):
+                            if is_point_in_polygon (row, col, polygon, nw_corner, mesh, mesh_type,plant_points):
                                 __occupy_footprint (mesh, *fp, row, col, tree_category)
             feature_stats.record(StatsTimer.FIND_SITES_END)
 
             with arcpy.da.InsertCursor(output_fc, ['SHAPE@', 'code']) as cursor:
-                plantings = [(r,c) for r,c in points.keys() if mesh[r][c] <= BIG]
-                for row,col in plantings:
-                    cursor.insertRow([points[(row,col)], mesh[row][col]])
+                for row,col in plant_points.keys():
+                    cursor.insertRow([plant_points[(row,col)], mesh[row][col]])
             feature_stats.record(StatsTimer.WRITE_SITES_END)
-            process_stats.accumulate (feature_stats, my_chunk, oid, mesh_row_dim * mesh_col_dim * MIN_DIAMETER * MIN_DIAMETER, polygon.getArea('PLANAR', 'SQUAREMETERS'), len(plantings))
+            process_stats.accumulate (feature_stats, my_chunk, oid, mesh_row_dim * mesh_col_dim * MIN_DIAMETER * MIN_DIAMETER, polygon.getArea('PLANAR', 'SQUAREMETERS'), len(plant_points))
 
 
             if WRITE_TO_DEBUG_MESH_FC and not IS_MP:
@@ -169,7 +173,7 @@ def __get_tier_vacancies (center_row, center_col, tier_idx, mesh, mesh_row_dim, 
     right = [(row, cols[-1]) for row in rows           if mesh[row][cols[-1]] == VACANT]
     bot   = [(rows[-1], col) for col in reversed(cols) if mesh[rows[-1]][col] == VACANT]
     left  = [(row, cols[0])  for row in reversed(rows) if mesh[row][cols[0]]  == VACANT]
-    return top + right + bot + left  
+    return list(OrderedDict.fromkeys(top + right + bot + left))
 
                         
 def __mesh_to_point (row, col, nw_corner):
@@ -200,19 +204,22 @@ def __is_footprint_clean (mesh, fp_row, fp_col, fp_row_dim, fp_col_dim):
     return True
 
 
-def is_point_in_polygon (row, col, polygon, nw_corner, mesh, points):
-    if mesh[row][col] == OUTSIDE_POLYGON:
-        return False
+def is_point_in_polygon (row, col, polygon, nw_corner, mesh, mesh_type, plant_points):
+    if mesh[row][col] != VACANT:
+        raise Exception ("Not vacant")
+        
+    if mesh_type == MESH_ALGORITHM_BIG:
+            plant_points[(row,col)] = __mesh_to_point (row, col, nw_corner)
+            return True
     else:
         point = __mesh_to_point (row, col, nw_corner)
         if point.within(polygon):
-            mesh[row][col] = VACANT
-            points[(row,col)] = point
+            plant_points[(row,col)] = point
             return True
         else:
             mesh[row][col] = OUTSIDE_POLYGON
             return False
-    
+
 
 def __occupy_footprint (mesh, fp_row, fp_col, fp_row_dim, fp_col_dim, planting_row, planting_col, tree_category):
     for r in range (fp_row, fp_row + fp_row_dim):
@@ -224,63 +231,52 @@ def __occupy_footprint (mesh, fp_row, fp_col, fp_row_dim, fp_col_dim, planting_r
 
 
 def __get_mesh (mesh_row_dim, mesh_col_dim, polygon, nw_corner):
+         
+    # Lincoln park take  160 minutes vs 4 minutes with this algorithm    
+    FISHNET_POLYLINE_FC = os.path.join('in_memory', 'fishnet_polyline')
+    FISHNET_POINT_FC = FISHNET_POLYLINE_FC + '_label' 
+    POLYGON_FC = os.path.join('in_memory', 'polygon')
+    INTERSECT_FC = os.path.join('in_memory', 'intersect')
     
-    ma = __get_mesh_algorithm (mesh_row_dim, mesh_col_dim, polygon)
-    if ma == MESH_ALGORITHM_SMALL:
-         mesh = [m[:] for m in [[VACANT] * mesh_col_dim] * mesh_row_dim] 
-    elif ma == MESH_ALGORITHM_BIG:         
-        # Lincoln park take  160 minutes vs 4 minutes with this algorithm    
-        FISHNET_POLYLINE_FC = os.path.join('in_memory', 'fishnet_polyline')
-        FISHNET_POINT_FC = FISHNET_POLYLINE_FC + '_label' 
-        POLYGON_FC = os.path.join('in_memory', 'polygon')
-        INTERSECT_FC = os.path.join('in_memory', 'intersect')
-        
-        x_min = nw_corner.X
-        y_min = nw_corner.Y - (mesh_row_dim * MIN_DIAMETER)
-        x_max = nw_corner.X + (mesh_col_dim * MIN_DIAMETER) 
-        y_max = nw_corner.Y 
+    x_min = nw_corner.X
+    y_min = nw_corner.Y - (mesh_row_dim * MIN_DIAMETER)
+    x_max = nw_corner.X + (mesh_col_dim * MIN_DIAMETER) 
+    y_max = nw_corner.Y 
+
+    arcpy.env.outputCoordinateSystem = arcpy.Describe(OPENINGS_FC).spatialReference
+           
+    arcpy.management.CreateFishnet(FISHNET_POLYLINE_FC, 
+                                   '%f %f' % (x_min, y_min), 
+                                   '%f %f' % (x_min, y_max), 
+                                   None, 
+                                   None, 
+                                   mesh_row_dim, 
+                                   mesh_col_dim, 
+                                   '%f %f' % (x_max, y_max), 
+                                   'LABELS', 
+                                   '#', 
+                                   'POLYLINE')
+
+    # Create feature class with the input polygon
+    arcpy.CreateFeatureclass_management(os.path.dirname(POLYGON_FC), os.path.basename(POLYGON_FC), "POLYGON", OPENINGS_FC)
     
-        arcpy.env.outputCoordinateSystem = arcpy.Describe(OPENINGS_FC).spatialReference
-               
-        logger.debug ('Creating fishnet: %i' % (mesh_row_dim*mesh_col_dim))
-        arcpy.management.CreateFishnet(FISHNET_POLYLINE_FC, 
-                                       '%f %f' % (x_min, y_min), 
-                                       '%f %f' % (x_min, y_max), 
-                                       None, 
-                                       None, 
-                                       mesh_row_dim, 
-                                       mesh_col_dim, 
-                                       '%f %f' % (x_max, y_max), 
-                                       'LABELS', 
-                                       '#', 
-                                       'POLYLINE')
-    
-        # Create feature class with the input polygon
-        logger.debug ('Creating feature class')
-        arcpy.CreateFeatureclass_management(os.path.dirname(POLYGON_FC), os.path.basename(POLYGON_FC), "POLYGON", OPENINGS_FC)
-        
-        with arcpy.da.InsertCursor(POLYGON_FC, ['SHAPE@']) as cursor:
-            cursor.insertRow([polygon])
-    
-        # Get the points within the polygon
-        logger.debug ('Intersecting')
-        arcpy.analysis.PairwiseIntersect([POLYGON_FC, FISHNET_POINT_FC], INTERSECT_FC)
-    
-        logger.debug ('Writing results')
-        # Initialize the mesh
-        mesh = [m[:] for m in [[OUTSIDE_POLYGON] * mesh_col_dim] * mesh_row_dim]     
-        with arcpy.da.SearchCursor(INTERSECT_FC, ['SHAPE@']) as cursor:
-            for attrs in cursor:
-                row, col = __point_to_mesh (attrs[0].centroid, nw_corner)
-                mesh[row][col] = VACANT
-    
-        logger.debug ('Deleting temp feature classes')
-        arcpy.management.Delete(FISHNET_POLYLINE_FC)
-        arcpy.management.Delete(FISHNET_POINT_FC)
-        arcpy.management.Delete(POLYGON_FC)
-        arcpy.management.Delete(INTERSECT_FC)
-    
-        logger.debug ('Done')
+    with arcpy.da.InsertCursor(POLYGON_FC, ['SHAPE@']) as cursor:
+        cursor.insertRow([polygon])
+
+    # Get the points within the polygon
+    arcpy.analysis.PairwiseIntersect([POLYGON_FC, FISHNET_POINT_FC], INTERSECT_FC)
+
+    # Initialize the mesh
+    mesh = [m[:] for m in [[OUTSIDE_POLYGON] * mesh_col_dim] * mesh_row_dim]     
+    with arcpy.da.SearchCursor(INTERSECT_FC, ['SHAPE@']) as cursor:
+        for attrs in cursor:
+            row, col = __point_to_mesh (attrs[0].centroid, nw_corner)
+            mesh[row][col] = VACANT
+
+    arcpy.management.Delete(FISHNET_POLYLINE_FC)
+    arcpy.management.Delete(FISHNET_POINT_FC)
+    arcpy.management.Delete(POLYGON_FC)
+    arcpy.management.Delete(INTERSECT_FC)
 
     return mesh
 
