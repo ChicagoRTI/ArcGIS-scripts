@@ -1,7 +1,7 @@
 import time
 
-import pp.logger.logger
-logger = pp.logger.logger.get('pp_log')
+import pp.logger
+logger = pp.logger.get('pp_log')
 
 
 
@@ -35,7 +35,7 @@ class StatsAccumulator:
     def accumulate (self, stats_timer, process_id, oid, mesh_sq_meters, polygon_sq_meters, plantings):
         quantities = [mesh_sq_meters, polygon_sq_meters, plantings]
         ttl_time = sum(stats_timer.times)
-        acres_per_second = polygon_sq_meters/ttl_time
+        acres_per_second = polygon_sq_meters/ttl_time if ttl_time != 0 else 0
         logger.info  ("{:>2s} {:>12s} {:>12.3f} {:>12.3f} {:>9d} {:>10.3f} {:>9.3f} {:>9.3f} {:>10.3f} {:>7.1f}".format(str(process_id), str(oid), *quantities, *stats_timer.times, ttl_time, acres_per_second))        
         for i in range (len(self.times)):
             self.times[i] = self.times[i] + stats_timer.times[i]

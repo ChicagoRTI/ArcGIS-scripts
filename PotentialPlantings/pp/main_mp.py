@@ -10,13 +10,13 @@ from collections import OrderedDict
 
 from pp.stats import StatsAccumulator
 from pp.stats import StatsTimer
-import pp.logger.logger
-logger = pp.logger.logger.get('pp_log')
+import pp.logger
+logger = pp.logger.get('pp_log')
 
 
 # Can not run in multiprocessing mode from the Spyder console
-IS_MP = True
-MP_NUM_CHUNKS = 2
+IS_MP = False
+MP_NUM_CHUNKS = 8
 WRITE_TO_DEBUG_MESH_FC = False
 
 #OPENINGS_FC = 'opening_single'
@@ -60,24 +60,25 @@ TREE_FOOTPRINT_DIM = {SMALL:  1,
 
 
 
-def run():
-    logger.info ("Logging to %s" % pp.logger.logger.LOG_FILE)
+def run(in_fc, query, out_fc):
+    logger.info ("Logging to %s" % pp.logger.LOG_FILE)
     start_time = timeit.default_timer()
-    arcpy.management.DeleteFeatures(PLANTS_FC)
+    arcpy.management.DeleteFeatures(out_fc)
     
     if IS_MP:
         logger.info('Launching ' + str(MP_NUM_CHUNKS) + ' worker processes')
         StatsAccumulator.log_header('Feature statistics')
-
+        
         # Create the set of tuples - each worker process gets one tuple for input        
         mp_run_spec_list = [(MP_NUM_CHUNKS, 
                              i,
-                             "(MOD(OBJECTID,%i) - %i = 0)" % (MP_NUM_CHUNKS, i),
-                             PLANTS_FC + '_' + str(i)) for i in range(MP_NUM_CHUNKS)]
+                             in_fc,
+                             ' AND '.join(filter(None,(query, "(MOD(OBJECTID,%i) - %i = 0)" % (MP_NUM_CHUNKS, i)))),                             
+                             out_fc + '_' + str(i)) for i in range(MP_NUM_CHUNKS)]
         for i in range(MP_NUM_CHUNKS):
-            chunk_fc = mp_run_spec_list[i][3]
+            chunk_fc = mp_run_spec_list[i][4]
             arcpy.Delete_management(chunk_fc)
-            arcpy.management.CreateFeatureclass(os.path.dirname(chunk_fc), os.path.basename(chunk_fc), 'POINT', PLANTS_FC)
+            arcpy.management.CreateFeatureclass(os.path.dirname(chunk_fc), os.path.basename(chunk_fc), 'POINT', out_fc)
             logger.debug('Created output feature class %s ' % chunk_fc)
  
         p = multiprocessing.Pool(MP_NUM_CHUNKS)
@@ -94,13 +95,14 @@ def run():
             
         # Reassemble the feature classes
         for i in range(MP_NUM_CHUNKS):
-            chunk_fc = mp_run_spec_list[i][3]
-            logger.debug('Appending ' + chunk_fc + ' to ' + PLANTS_FC)
-            arcpy.Append_management(chunk_fc, PLANTS_FC)
+            chunk_fc = mp_run_spec_list[i][4]
+            logger.debug('Appending ' + chunk_fc + ' to ' + out_fc)
+            arcpy.Append_management(chunk_fc, out_fc)
+            arcpy.Delete_management(chunk_fc)
             
     else:
         StatsAccumulator.log_header('Feature statistics')
-        process_stats = run_mp ( (1, 0, None, PLANTS_FC) )
+        process_stats = run_mp ( (1, 0, in_fc, query, out_fc) )
         StatsAccumulator.log_header('Totals')
         process_stats.log_accumulation(0)
 
@@ -109,18 +111,16 @@ def run():
 
 
 def run_mp (run_spec):    
-    chunks, my_chunk, query, output_fc = run_spec
-    
-    logger.debug ("Chunk %i of %i. Output will be written to %s" % (my_chunk+1, chunks, output_fc))
-  
-                          
+    logger.debug ("Input: %s" % (str(run_spec)))
+    chunks, my_chunk, input_fc, query, output_fc = run_spec
+                              
     if WRITE_TO_DEBUG_MESH_FC and not IS_MP:
         arcpy.management.DeleteFeatures(MESH_FC)
         
     process_stats = StatsAccumulator()
         
     logger.debug  ("Calculating points")
-    with arcpy.da.SearchCursor(OPENINGS_FC, ['OBJECTID', 'SHAPE@'], query) as cursor:
+    with arcpy.da.SearchCursor(input_fc, ['OBJECTID', 'SHAPE@'], query) as cursor:
         for attrs in cursor:
             feature_stats = StatsTimer()
             oid = attrs[0]
@@ -315,45 +315,11 @@ def __get_mesh_algorithm (mesh_row_dim, mesh_col_dim, polygon):
             return MESH_ALGORITHM_BIG
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    
+  
 
 
 if __name__ == '__main__':
-     run()
+     run(OPENINGS_FC, None, PLANTS_FC)
     
     
 
