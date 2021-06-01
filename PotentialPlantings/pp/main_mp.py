@@ -8,35 +8,42 @@ import multiprocessing
 import timeit
 from collections import OrderedDict
 
-from pp.stats import StatsAccumulator
-from pp.stats import StatsTimer
-import pp.logger
-logger = pp.logger.get('pp_log')
+from stats import StatsAccumulator
+from stats import StatsTimer
+import logger as pp_logger
+logger = pp_logger.get('pp_log')
 
 
 # Can not run in multiprocessing mode from the Spyder console
-IS_MP = False
+IS_MP = True
 MP_NUM_CHUNKS = 8
 WRITE_TO_DEBUG_MESH_FC = False
 
 #OPENINGS_FC = 'opening_single'
-OPENINGS_FC = 'openings'
+#OPENINGS_FC = 'PP_TEST_openings'
 #OPENINGS_FC = 'campus_parks_projected'
 #OPENINGS_FC = 'chicago_parks_single_tiny'
-#OPENINGS_FC = 'chicago_parks'
+OPENINGS_FC = 'PP_TEST_chicago_parks'
 #OPENINGS_FC = 'lincoln_park'
 
+DB_DIR = r'C:\Users\dmorrison\AppData\Roaming\ESRI\Desktop10.6\ArcCatalog\ROW Habitat (SDE).SDE'
 
-OPENINGS_FC = os.path.join(r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb', OPENINGS_FC)
-
+#OPENINGS_FC = os.path.join(r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb', OPENINGS_FC)
+OPENINGS_FC = os.path.join(DB_DIR, OPENINGS_FC)
 # #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\opening_single'
 # OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\openings'
 # #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\campus_parks_projected'
 # #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\chicago_parks_single_tiny'
 # #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\chicago_parks'
 # #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\lincoln_park'
-PLANTS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\plants'
-MESH_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\mesh'
+
+#PLANTS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\plants'
+#MESH_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\mesh'
+
+PLANTS_FC = os.path.join(DB_DIR, 'PP_TEST_plants')
+MESH_FC = os.path.join(DB_DIR, 'PP_TEST_mesh')
+
+
 MIN_DIAMETER = 10 * 0.3048
 NEG_BUFFER = - (10 * 0.3048)
 
@@ -61,7 +68,7 @@ TREE_FOOTPRINT_DIM = {SMALL:  1,
 
 
 def run(in_fc, query, out_fc):
-    logger.info ("Logging to %s" % pp.logger.LOG_FILE)
+    logger.info ("Logging to %s" % pp_logger.LOG_FILE)
     start_time = timeit.default_timer()
     arcpy.management.DeleteFeatures(out_fc)
     
@@ -73,7 +80,7 @@ def run(in_fc, query, out_fc):
         mp_run_spec_list = [(MP_NUM_CHUNKS, 
                              i,
                              in_fc,
-                             ' AND '.join(filter(None,(query, "(MOD(OBJECTID,%i) - %i = 0)" % (MP_NUM_CHUNKS, i)))),                             
+                             ' AND '.join(filter(None,(query, "((OBJECTID %% %i) - %i = 0)" % (MP_NUM_CHUNKS, i)))),                             
                              out_fc + '_' + str(i)) for i in range(MP_NUM_CHUNKS)]
         for i in range(MP_NUM_CHUNKS):
             chunk_fc = mp_run_spec_list[i][4]

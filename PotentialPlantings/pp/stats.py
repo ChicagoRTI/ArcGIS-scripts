@@ -1,7 +1,7 @@
 import time
 
-import pp.logger
-logger = pp.logger.get('pp_log')
+import logger as pp_logger
+logger = pp_logger.get('pp_log')
 
 
 
