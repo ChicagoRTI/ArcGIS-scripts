@@ -15,16 +15,16 @@ logger = pp.logger.logger.get('pp_log')
 
 
 # Can not run in multiprocessing mode from the Spyder console
-IS_MP = False
-MP_NUM_CHUNKS = 8
+IS_MP = True
+MP_NUM_CHUNKS = 2
 WRITE_TO_DEBUG_MESH_FC = False
 
 #OPENINGS_FC = 'opening_single'
-#OPENINGS_FC = 'openings'
+OPENINGS_FC = 'openings'
 #OPENINGS_FC = 'campus_parks_projected'
 #OPENINGS_FC = 'chicago_parks_single_tiny'
 #OPENINGS_FC = 'chicago_parks'
-OPENINGS_FC = 'lincoln_park'
+#OPENINGS_FC = 'lincoln_park'
 
 
 OPENINGS_FC = os.path.join(r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb', OPENINGS_FC)
@@ -70,15 +70,18 @@ def run():
         StatsAccumulator.log_header('Feature statistics')
 
         # Create the set of tuples - each worker process gets one tuple for input        
-        mp_chunk_list = [(MP_NUM_CHUNKS, i, PLANTS_FC + '_' + str(i)) for i in range(MP_NUM_CHUNKS)]
+        mp_run_spec_list = [(MP_NUM_CHUNKS, 
+                             i,
+                             "(MOD(OBJECTID,%i) - %i = 0)" % (MP_NUM_CHUNKS, i),
+                             PLANTS_FC + '_' + str(i)) for i in range(MP_NUM_CHUNKS)]
         for i in range(MP_NUM_CHUNKS):
-            chunk_fc = mp_chunk_list[i][2]
+            chunk_fc = mp_run_spec_list[i][3]
             arcpy.Delete_management(chunk_fc)
             arcpy.management.CreateFeatureclass(os.path.dirname(chunk_fc), os.path.basename(chunk_fc), 'POINT', PLANTS_FC)
             logger.debug('Created output feature class %s ' % chunk_fc)
  
         p = multiprocessing.Pool(MP_NUM_CHUNKS)
-        process_stats = p.map(run_mp, mp_chunk_list)
+        process_stats = p.map(run_mp, mp_run_spec_list)
         p.close()
         
         StatsAccumulator.log_header('Process statistics')
@@ -91,13 +94,13 @@ def run():
             
         # Reassemble the feature classes
         for i in range(MP_NUM_CHUNKS):
-            chunk_fc = mp_chunk_list[i][2]
+            chunk_fc = mp_run_spec_list[i][3]
             logger.debug('Appending ' + chunk_fc + ' to ' + PLANTS_FC)
             arcpy.Append_management(chunk_fc, PLANTS_FC)
             
     else:
         StatsAccumulator.log_header('Feature statistics')
-        process_stats = run_mp ( (1, 0, PLANTS_FC) )
+        process_stats = run_mp ( (1, 0, None, PLANTS_FC) )
         StatsAccumulator.log_header('Totals')
         process_stats.log_accumulation(0)
 
@@ -105,8 +108,8 @@ def run():
     logger.info("Program Executed in %s seconds" % str(round(timeit.default_timer()-start_time)))
 
 
-def run_mp (chunk):    
-    chunks, my_chunk, output_fc = chunk
+def run_mp (run_spec):    
+    chunks, my_chunk, query, output_fc = run_spec
     
     logger.debug ("Chunk %i of %i. Output will be written to %s" % (my_chunk+1, chunks, output_fc))
   
@@ -117,7 +120,7 @@ def run_mp (chunk):
     process_stats = StatsAccumulator()
         
     logger.debug  ("Calculating points")
-    with arcpy.da.SearchCursor(OPENINGS_FC, ['OBJECTID', 'SHAPE@'], "(MOD(OBJECTID,%i) - %i = 0)" % (chunks, my_chunk)) as cursor:
+    with arcpy.da.SearchCursor(OPENINGS_FC, ['OBJECTID', 'SHAPE@'], query) as cursor:
         for attrs in cursor:
             feature_stats = StatsTimer()
             oid = attrs[0]
