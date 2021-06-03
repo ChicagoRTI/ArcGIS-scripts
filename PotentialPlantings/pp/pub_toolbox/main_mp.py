@@ -7,16 +7,18 @@ import math
 import multiprocessing
 import timeit
 from collections import OrderedDict
+import time
 
-from stats import StatsAccumulator
-from stats import StatsTimer
+
 import logger as pp_logger
 logger = pp_logger.get('pp_log')
 
 
+LOG_DETAILS = False
+
 # Can not run in multiprocessing mode from the Spyder console
 IS_MP = False
-MP_NUM_CHUNKS = 8
+MP_NUM_CHUNKS = 2
 WRITE_TO_DEBUG_MESH_FC = False
 
 #OPENINGS_FC = 'opening_single'
@@ -69,6 +71,73 @@ TREE_FOOTPRINT_DIM = {SMALL:  1,
                       BIG:    5}
 
 
+class StatsTimer:
+    
+    MESH_CREATE_END = 0
+    FIND_SITES_END = 1
+    WRITE_SITES_END = 2
+        
+    def __init__(self, desc=''):
+        self.times = [time.monotonic(), -1, -1]
+        self.quantities = [0, 0, 0]
+        self.desc = desc
+    
+    def record (self, i):
+        now = time.monotonic()
+        self.times[i] = now - self.times[i]
+        if i+1 < len(self.times):
+            self.times[i+1] = time.monotonic()
+
+
+   
+class StatsAccumulator:
+           
+    def __init__(self, desc=''):
+        self.times = [0,0,0]
+        self.t_ttl = 0
+        self.quantities = [0, 0, 0]
+        self.desc = desc
+                    
+    def accumulate (self, stats_timer, process_id, oid, mesh_sq_meters, polygon_sq_meters, plantings):
+        quantities = [mesh_sq_meters, polygon_sq_meters, plantings]
+        ttl_time = sum(stats_timer.times)
+        if LOG_DETAILS:
+            acres_per_second = polygon_sq_meters/ttl_time if ttl_time != 0 else 0
+            logger.info  ("{:>2s} {:>12s} {:>12.3f} {:>12.3f} {:>9d} {:>10.3f} {:>9.3f} {:>9.3f} {:>10.3f} {:>7.1f}".format(str(process_id), str(oid), *quantities, *stats_timer.times, ttl_time, acres_per_second))        
+        for i in range (len(self.times)):
+            self.times[i] = self.times[i] + stats_timer.times[i]
+        for i in range (len(self.quantities)):
+            self.quantities[i] = self.quantities[i] + quantities[i]
+        self.t_ttl = self.t_ttl + ttl_time
+
+    def add (self, stats_accumulator):
+        for i in range (len(self.times)):
+            self.times[i] = self.times[i] + stats_accumulator.times[i]
+        for i in range (len(self.quantities)):
+            self.quantities[i] = self.quantities[i] + stats_accumulator.quantities[i]
+        self.t_ttl = self.t_ttl + stats_accumulator.t_ttl
+        
+        
+    def log_accumulation (self, process_id):
+        pid = '' if process_id is None else str(process_id)
+        acres_per_second = self.quantities[1]/self.t_ttl
+        logger.info  ("{:>2s} {:>12s} {:>12.3f} {:>12.3f} {:>9d} {:>10.3f} {:>9.3f} {:>9.3f} {:>10.3f} {:>7.1f}".format(pid, '', *self.quantities, *self.times, self.t_ttl, acres_per_second))        
+
+
+
+    @staticmethod
+    def log_header (desc):
+        logger.info  ('')
+        logger.info  (desc)
+        logger.info  ('--------------------')
+        logger.info  ("{:>2s} {:>12s} {:>12s} {:>12s} {:>9s} {:>10s} {:>9s} {:>9s} {:>10s} {:>7s}".format('',      '', 'Mesh ',  'Polygon', '',       'Mesh   ',  'Plant  ', 'Write  ', 'Total  ', 'Acres/'))
+        logger.info  ("{:>2s} {:>12s} {:>12s} {:>12s} {:>9s} {:>10s} {:>9s} {:>9s} {:>10s} {:>7s}".format('Pr', 'OID', 'Acres',  'Acres  ', 'Plants', 'Seconds',  'Seconds', 'Seconds', 'Seconds', 'Second'))
+
+        
+
+
+
+
 
 def run(in_fc, query, out_fc):
     logger.info ("Logging to %s" % pp_logger.LOG_FILE)
@@ -90,10 +159,10 @@ def run(in_fc, query, out_fc):
         
         # Create the set of tuples - each worker process gets one tuple for input        
         mp_run_spec_list = [(MP_NUM_CHUNKS, 
-                             i,
-                             in_fc,
-                             ' AND '.join(filter(None,(query, "((OBJECTID %% %i) - %i = 0)" % (MP_NUM_CHUNKS, i)))),                             
-                             MP_TEMP_OUT_FC_ROOT + '_' + str(i)) for i in range(MP_NUM_CHUNKS)]
+                              i,
+                              in_fc,
+                              ' AND '.join(filter(None,(query, "((OBJECTID %% %i) - %i = 0)" % (MP_NUM_CHUNKS, i)))),                             
+                              MP_TEMP_OUT_FC_ROOT + '_' + str(i)) for i in range(MP_NUM_CHUNKS)]
         for i in range(MP_NUM_CHUNKS):
             chunk_out_fc = mp_run_spec_list[i][4]
             arcpy.Delete_management(chunk_out_fc)
@@ -280,16 +349,16 @@ def __get_mesh (mesh_row_dim, mesh_col_dim, polygon, nw_corner):
     arcpy.env.outputCoordinateSystem = arcpy.Describe(OPENINGS_FC).spatialReference
            
     arcpy.management.CreateFishnet(FISHNET_POLYLINE_FC, 
-                                   '%f %f' % (x_min, y_min), 
-                                   '%f %f' % (x_min, y_max), 
-                                   None, 
-                                   None, 
-                                   mesh_row_dim, 
-                                   mesh_col_dim, 
-                                   '%f %f' % (x_max, y_max), 
-                                   'LABELS', 
-                                   '#', 
-                                   'POLYLINE')
+                                    '%f %f' % (x_min, y_min), 
+                                    '%f %f' % (x_min, y_max), 
+                                    None, 
+                                    None, 
+                                    mesh_row_dim, 
+                                    mesh_col_dim, 
+                                    '%f %f' % (x_max, y_max), 
+                                    'LABELS', 
+                                    '#', 
+                                    'POLYLINE')
 
     # Create feature class with the input polygon
     arcpy.CreateFeatureclass_management(os.path.dirname(POLYGON_FC), os.path.basename(POLYGON_FC), "POLYGON", OPENINGS_FC)
@@ -339,7 +408,7 @@ def __get_mesh_algorithm (mesh_row_dim, mesh_col_dim, polygon):
 
 
 if __name__ == '__main__':
-     run(OPENINGS_FC, None, PLANTS_FC)
+      run(OPENINGS_FC, None, PLANTS_FC)
     
     
 
