@@ -4,6 +4,10 @@ import arcpy
 import pub_tool
 
 
+import importlib
+importlib.reload(pub_tool)
+
+
 class Toolbox(object):
     def __init__(self):
         """Define the toolbox (the name of the toolbox is the name of the
@@ -23,7 +27,6 @@ class FindPlantSites(object):
         self.canRunInBackground = False
 
     def getParameterInfo(self):
-        """Define parameter definitions"""
         params = pub_tool.getParameterInfo()
         return params
 
@@ -43,5 +46,5 @@ class FindPlantSites(object):
         return
 
     def execute(self, parameters, messages):
-        """The source code of the tool."""
+        pub_tool.execute(parameters)
         return

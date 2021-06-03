@@ -15,21 +15,24 @@ logger = pp_logger.get('pp_log')
 
 
 # Can not run in multiprocessing mode from the Spyder console
-IS_MP = True
+IS_MP = False
 MP_NUM_CHUNKS = 8
 WRITE_TO_DEBUG_MESH_FC = False
 
 #OPENINGS_FC = 'opening_single'
-#OPENINGS_FC = 'PP_TEST_openings'
+OPENINGS_FC = 'PP_TEST_openings'
 #OPENINGS_FC = 'campus_parks_projected'
 #OPENINGS_FC = 'chicago_parks_single_tiny'
-OPENINGS_FC = 'PP_TEST_chicago_parks'
+#OPENINGS_FC = 'PP_TEST_chicago_parks'
 #OPENINGS_FC = 'lincoln_park'
+#OPENINGS_FC = 'PP_TEST_pp_spaces_projected_dissolved'
+#OPENINGS_FC = 'PP_TEST_pp__swi_spaces_projected'
 
 DB_DIR = r'C:\Users\dmorrison\AppData\Roaming\ESRI\Desktop10.6\ArcCatalog\ROW Habitat (SDE).SDE'
+OPENINGS_FC = os.path.join(DB_DIR, OPENINGS_FC)
+
 
 #OPENINGS_FC = os.path.join(r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb', OPENINGS_FC)
-OPENINGS_FC = os.path.join(DB_DIR, OPENINGS_FC)
 # #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\opening_single'
 # OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\openings'
 # #OPENINGS_FC = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb\campus_parks_projected'
@@ -42,7 +45,7 @@ OPENINGS_FC = os.path.join(DB_DIR, OPENINGS_FC)
 
 PLANTS_FC = os.path.join(DB_DIR, 'PP_TEST_plants')
 MESH_FC = os.path.join(DB_DIR, 'PP_TEST_mesh')
-
+MP_TEMP_OUT_FC_ROOT = os.path.join(arcpy.env.scratchGDB, 'temp_mp_out_fc')
 
 MIN_DIAMETER = 10 * 0.3048
 NEG_BUFFER = - (10 * 0.3048)
@@ -70,7 +73,16 @@ TREE_FOOTPRINT_DIM = {SMALL:  1,
 def run(in_fc, query, out_fc):
     logger.info ("Logging to %s" % pp_logger.LOG_FILE)
     start_time = timeit.default_timer()
-    arcpy.management.DeleteFeatures(out_fc)
+    if arcpy.Exists(out_fc):
+        arcpy.management.DeleteFeatures(out_fc)
+    else:
+        arcpy.CreateFeatureclass_management(os.path.dirname(out_fc),
+                                            os.path.basename(out_fc),
+                                            "POINT",
+                                            PLANTS_FC,
+                                            "DISABLED", 
+                                            "DISABLED", 
+                                            PLANTS_FC)
     
     if IS_MP:
         logger.info('Launching ' + str(MP_NUM_CHUNKS) + ' worker processes')
@@ -81,12 +93,12 @@ def run(in_fc, query, out_fc):
                              i,
                              in_fc,
                              ' AND '.join(filter(None,(query, "((OBJECTID %% %i) - %i = 0)" % (MP_NUM_CHUNKS, i)))),                             
-                             out_fc + '_' + str(i)) for i in range(MP_NUM_CHUNKS)]
+                             MP_TEMP_OUT_FC_ROOT + '_' + str(i)) for i in range(MP_NUM_CHUNKS)]
         for i in range(MP_NUM_CHUNKS):
-            chunk_fc = mp_run_spec_list[i][4]
-            arcpy.Delete_management(chunk_fc)
-            arcpy.management.CreateFeatureclass(os.path.dirname(chunk_fc), os.path.basename(chunk_fc), 'POINT', out_fc)
-            logger.debug('Created output feature class %s ' % chunk_fc)
+            chunk_out_fc = mp_run_spec_list[i][4]
+            arcpy.Delete_management(chunk_out_fc)
+            arcpy.management.CreateFeatureclass(os.path.dirname(chunk_out_fc), os.path.basename(chunk_out_fc), 'POINT', out_fc)
+            logger.debug('Created output feature class %s ' % chunk_out_fc)
  
         p = multiprocessing.Pool(MP_NUM_CHUNKS)
         process_stats = p.map(run_mp, mp_run_spec_list)
@@ -101,11 +113,12 @@ def run(in_fc, query, out_fc):
         app_stats.log_accumulation(None)           
             
         # Reassemble the feature classes
+        logger.info('Merging output data')
         for i in range(MP_NUM_CHUNKS):
-            chunk_fc = mp_run_spec_list[i][4]
-            logger.debug('Appending ' + chunk_fc + ' to ' + out_fc)
-            arcpy.Append_management(chunk_fc, out_fc)
-            arcpy.Delete_management(chunk_fc)
+            chunk_out_fc = mp_run_spec_list[i][4]
+            logger.debug('Appending ' + chunk_out_fc + ' to ' + out_fc)
+            arcpy.Append_management(chunk_out_fc, out_fc)
+            arcpy.Delete_management(chunk_out_fc)
             
     else:
         StatsAccumulator.log_header('Feature statistics')
