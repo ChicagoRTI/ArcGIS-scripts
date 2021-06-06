@@ -1,4 +1,5 @@
 # Requires python 3
+import sys 
 
 
 import arcpy
@@ -10,7 +11,7 @@ from collections import OrderedDict
 import time
 
 
-import logger as pp_logger
+import pp_logger
 logger = pp_logger.get('pp_log')
 
 
@@ -22,12 +23,12 @@ MP_NUM_CHUNKS = 2
 WRITE_TO_DEBUG_MESH_FC = False
 
 #OPENINGS_FC = 'opening_single'
-OPENINGS_FC = 'PP_TEST_openings'
+#OPENINGS_FC = 'PP_TEST_openings'
 #OPENINGS_FC = 'campus_parks_projected'
 #OPENINGS_FC = 'chicago_parks_single_tiny'
 #OPENINGS_FC = 'PP_TEST_chicago_parks'
 #OPENINGS_FC = 'lincoln_park'
-#OPENINGS_FC = 'PP_TEST_pp_spaces_projected_dissolved'
+OPENINGS_FC = 'PP_TEST_pp_spaces_projected'
 #OPENINGS_FC = 'PP_TEST_pp__swi_spaces_projected'
 
 DB_DIR = r'C:\Users\dmorrison\AppData\Roaming\ESRI\Desktop10.6\ArcCatalog\ROW Habitat (SDE).SDE'
@@ -242,9 +243,9 @@ def run_mp (run_spec):
                                 __occupy_footprint (mesh, *fp, row, col, tree_category)
             feature_stats.record(StatsTimer.FIND_SITES_END)
 
-            with arcpy.da.InsertCursor(output_fc, ['SHAPE@', 'code']) as cursor:
+            with arcpy.da.InsertCursor(output_fc, ['SHAPE@', 'code', 'p_oid']) as cursor:
                 for row,col in plant_points.keys():
-                    cursor.insertRow([plant_points[(row,col)], mesh[row][col]])
+                    cursor.insertRow([plant_points[(row,col)], mesh[row][col], oid])
             feature_stats.record(StatsTimer.WRITE_SITES_END)
             process_stats.accumulate (feature_stats, my_chunk, oid, mesh_row_dim * mesh_col_dim * MIN_DIAMETER * MIN_DIAMETER * 0.000247105, polygon.getArea('PLANAR', 'ACRES'), len(plant_points))
 
@@ -408,7 +409,8 @@ def __get_mesh_algorithm (mesh_row_dim, mesh_col_dim, polygon):
 
 
 if __name__ == '__main__':
-      run(OPENINGS_FC, None, PLANTS_FC)
+    pass
+#    run(OPENINGS_FC, None, PLANTS_FC)
     
     
 
