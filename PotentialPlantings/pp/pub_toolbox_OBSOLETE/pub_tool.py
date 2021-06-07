@@ -49,7 +49,7 @@ def getParameterInfo ():
         #         direction="Input")                
 
         class_ = arcpy.Parameter(
-            displayName="Class",
+            displayName="Community",
             name="class",
             datatype="String",
             parameterType="Required",
@@ -59,12 +59,12 @@ def getParameterInfo ():
         class_.value = class_.filter.list[0]
 
         output =  arcpy.Parameter(
-                displayName="Output", 
+                displayName="Planting Sites", 
                 name="output", 
                 datatype="DEFeatureClass",  
                 parameterType="Derived",  
                 direction="Output")
-
+        output.symbology = os.path.join(os.path.dirname(__file__), 'symbology.lyrx')
 
 
 
@@ -84,11 +84,7 @@ def execute(parameters):
     arcpy.Delete_management(out_fc)
     main_mp.run(in_fc, "community = '%s'" % (parameters[0].value), out_fc)    
     parameters[1].value = out_fc
-    parameters[1].symbology = os.path.join(os.path.dirname(__file__), 'symbology.lyrx')
 
-
-
-    # parameters[1].symbology = r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\data\plants.lyrx'
 
 
     # aprx = arcpy.mp.ArcGISProject('CURRENT')

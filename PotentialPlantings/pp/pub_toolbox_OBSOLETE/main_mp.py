@@ -210,11 +210,9 @@ def run_mp (run_spec):
     process_stats = StatsAccumulator()
         
     logger.debug  ("Calculating points")
-    with arcpy.da.SearchCursor(input_fc, ['OBJECTID', 'SHAPE@'], query) as cursor:
-        for attrs in cursor:
+    with arcpy.da.SearchCursor(input_fc, ['OBJECTID', 'SHAPE@', 'Community'], query) as cursor:
+        for oid, polygon, community in cursor:
             feature_stats = StatsTimer()
-            oid = attrs[0]
-            polygon = attrs[1]
             x_min, y_min, x_max, y_max = polygon.extent.XMin, polygon.extent.YMin, polygon.extent.XMax, polygon.extent.YMax 
 
             center = arcpy.Point((x_min+x_max)/2, (y_min+y_max)/2)
@@ -243,9 +241,9 @@ def run_mp (run_spec):
                                 __occupy_footprint (mesh, *fp, row, col, tree_category)
             feature_stats.record(StatsTimer.FIND_SITES_END)
 
-            with arcpy.da.InsertCursor(output_fc, ['SHAPE@', 'code', 'p_oid']) as cursor:
+            with arcpy.da.InsertCursor(output_fc, ['SHAPE@', 'code', 'p_oid', 'community']) as cursor:
                 for row,col in plant_points.keys():
-                    cursor.insertRow([plant_points[(row,col)], mesh[row][col], oid])
+                    cursor.insertRow([plant_points[(row,col)], mesh[row][col], oid, community])
             feature_stats.record(StatsTimer.WRITE_SITES_END)
             process_stats.accumulate (feature_stats, my_chunk, oid, mesh_row_dim * mesh_col_dim * MIN_DIAMETER * MIN_DIAMETER * 0.000247105, polygon.getArea('PLANAR', 'ACRES'), len(plant_points))
 
