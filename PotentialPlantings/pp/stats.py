@@ -3,7 +3,7 @@ import time
 import pp.logger
 logger = pp.logger.get('pp_log')
 
-LOG_DETAILS = False
+LOG_DETAILS_FREQUENCY = 1000
 
 class StatsTimer:
     
@@ -27,6 +27,7 @@ class StatsTimer:
 class StatsAccumulator:
            
     def __init__(self, desc=''):
+        self.count = 0
         self.times = [0,0,0]
         self.t_ttl = 0
         self.quantities = [0, 0, 0]
@@ -35,9 +36,11 @@ class StatsAccumulator:
     def accumulate (self, stats_timer, process_id, oid, mesh_sq_meters, polygon_sq_meters, plantings):
         quantities = [mesh_sq_meters, polygon_sq_meters, plantings]
         ttl_time = sum(stats_timer.times)
-        if LOG_DETAILS:
+        self.count = self.count + 1
+        
+        if LOG_DETAILS_FREQUENCY > 0 and self.count % LOG_DETAILS_FREQUENCY == 0:
             acres_per_second = polygon_sq_meters/ttl_time if ttl_time != 0 else 0
-            logger.info  ("{:>2s} {:>12s} {:>12.3f} {:>12.3f} {:>9d} {:>10.3f} {:>9.3f} {:>9.3f} {:>10.3f} {:>7.1f}".format(str(process_id), str(oid), *quantities, *stats_timer.times, ttl_time, acres_per_second))        
+            logger.info  ("{:>2s} {:>12s} {:>12.3f} {:>12.3f} {:>9d} {:>10.3f} {:>9.3f} {:>9.3f} {:>10.3f} {:>7.1f} {:>8d}".format(str(process_id), str(oid), *quantities, *stats_timer.times, ttl_time, acres_per_second, self.count))        
         for i in range (len(self.times)):
             self.times[i] = self.times[i] + stats_timer.times[i]
         for i in range (len(self.quantities)):
@@ -55,7 +58,7 @@ class StatsAccumulator:
     def log_accumulation (self, process_id):
         pid = '' if process_id is None else str(process_id)
         acres_per_second = self.quantities[1]/self.t_ttl
-        logger.info  ("{:>2s} {:>12s} {:>12.3f} {:>12.3f} {:>9d} {:>10.3f} {:>9.3f} {:>9.3f} {:>10.3f} {:>7.1f}".format(pid, '', *self.quantities, *self.times, self.t_ttl, acres_per_second))        
+        logger.info  ("{:>2s} {:>12s} {:>12.3f} {:>12.3f} {:>9d} {:>10.3f} {:>9.3f} {:>9.3f} {:>10.3f} {:>7.1f} {:>8d}".format(pid, '', *self.quantities, *self.times, self.t_ttl, acres_per_second, self.count))        
 
 
 
@@ -64,9 +67,5 @@ class StatsAccumulator:
         logger.info  ('')
         logger.info  (desc)
         logger.info  ('--------------------')
-        logger.info  ("{:>2s} {:>12s} {:>12s} {:>12s} {:>9s} {:>10s} {:>9s} {:>9s} {:>10s} {:>7s}".format('',      '', 'Mesh ',  'Polygon', '',       'Mesh   ',  'Plant  ', 'Write  ', 'Total  ', 'Acres/'))
-        logger.info  ("{:>2s} {:>12s} {:>12s} {:>12s} {:>9s} {:>10s} {:>9s} {:>9s} {:>10s} {:>7s}".format('Pr', 'OID', 'Acres',  'Acres  ', 'Plants', 'Seconds',  'Seconds', 'Seconds', 'Seconds', 'Second'))
-
-        
-
-    
+        logger.info  ("{:>2s} {:>12s} {:>12s} {:>12s} {:>9s} {:>10s} {:>9s} {:>9s} {:>10s} {:>7s} {:>8s}".format('',      '', 'Mesh ',  'Site',       '',  'Mesh   ',  'Tree   ', 'Write  ', 'Total  ', 'Acres/', 'Total'))
+        logger.info  ("{:>2s} {:>12s} {:>12s} {:>12s} {:>9s} {:>10s} {:>9s} {:>9s} {:>10s} {:>7s} {:>8s}".format('Pr', 'OID', 'Acres',  'Acres', 'Trees',  'Seconds',  'Seconds', 'Seconds', 'Seconds', 'Second', 'Sites'))

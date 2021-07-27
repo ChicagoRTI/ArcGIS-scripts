@@ -17,20 +17,18 @@ import pp.logger
 logger = pp.logger.get('pp_log')
 
 
-LOG_DETAILS = False
-
 # Can not run in multiprocessing mode from the Spyder console
-IS_MP = True
+IS_MP = False
 MP_NUM_CHUNKS = 8
 WRITE_TO_DEBUG_MESH_FC = False
 
 #OPENINGS_FC = 'opening_single'
-#OPENINGS_FC = 'PP_TEST_openings'
+OPENINGS_FC = 'PP_TEST_openings'
 #OPENINGS_FC = 'campus_parks_projected'
 #OPENINGS_FC = 'chicago_parks_single_tiny'
 #OPENINGS_FC = 'PP_TEST_chicago_parks'
 #OPENINGS_FC = 'lincoln_park'
-OPENINGS_FC = 'PP_TEST_pp_spaces_projected'
+#OPENINGS_FC = 'PP_TEST_pp_spaces_projected'
 #OPENINGS_FC = 'PP_TEST_pp__swi_spaces_projected'
 
 DB_DIR = r'C:\Users\dmorrison\AppData\Roaming\ESRI\Desktop10.6\ArcCatalog\ROW Habitat (SDE).SDE'
@@ -53,6 +51,7 @@ PLANTS_TEMPLATE_FC = os.path.join(DB_DIR, 'PP_TEST_plants_TEMPLATE')
 MESH_FC = os.path.join(DB_DIR, 'PP_TEST_mesh')
 MP_TEMP_OUT_FC_ROOT = os.path.join(arcpy.env.scratchGDB, 'temp_mp_out_fc')
 
+
 MIN_DIAMETER = 10 * 0.3048
 NEG_BUFFER = - (10 * 0.3048)
 
@@ -73,74 +72,6 @@ TREE_CATEGORIES = [BIG, MEDIUM, SMALL]
 TREE_FOOTPRINT_DIM = {SMALL:  1,
                       MEDIUM: 3,
                       BIG:    5}
-
-
-# class StatsTimer:
-    
-#     MESH_CREATE_END = 0
-#     FIND_SITES_END = 1
-#     WRITE_SITES_END = 2
-        
-#     def __init__(self, desc=''):
-#         self.times = [time.monotonic(), -1, -1]
-#         self.quantities = [0, 0, 0]
-#         self.desc = desc
-    
-#     def record (self, i):
-#         now = time.monotonic()
-#         self.times[i] = now - self.times[i]
-#         if i+1 < len(self.times):
-#             self.times[i+1] = time.monotonic()
-
-
-   
-# class StatsAccumulator:
-           
-#     def __init__(self, desc=''):
-#         self.times = [0,0,0]
-#         self.t_ttl = 0
-#         self.quantities = [0, 0, 0]
-#         self.desc = desc
-                    
-#     def accumulate (self, stats_timer, process_id, oid, mesh_sq_meters, polygon_sq_meters, plantings):
-#         quantities = [mesh_sq_meters, polygon_sq_meters, plantings]
-#         ttl_time = sum(stats_timer.times)
-#         if LOG_DETAILS:
-#             acres_per_second = polygon_sq_meters/ttl_time if ttl_time != 0 else 0
-#             logger.info  ("{:>2s} {:>12s} {:>12.3f} {:>12.3f} {:>9d} {:>10.3f} {:>9.3f} {:>9.3f} {:>10.3f} {:>7.1f}".format(str(process_id), str(oid), *quantities, *stats_timer.times, ttl_time, acres_per_second))        
-#         for i in range (len(self.times)):
-#             self.times[i] = self.times[i] + stats_timer.times[i]
-#         for i in range (len(self.quantities)):
-#             self.quantities[i] = self.quantities[i] + quantities[i]
-#         self.t_ttl = self.t_ttl + ttl_time
-
-#     def add (self, stats_accumulator):
-#         for i in range (len(self.times)):
-#             self.times[i] = self.times[i] + stats_accumulator.times[i]
-#         for i in range (len(self.quantities)):
-#             self.quantities[i] = self.quantities[i] + stats_accumulator.quantities[i]
-#         self.t_ttl = self.t_ttl + stats_accumulator.t_ttl
-        
-        
-#     def log_accumulation (self, process_id):
-#         pid = '' if process_id is None else str(process_id)
-#         acres_per_second = self.quantities[1]/self.t_ttl
-#         logger.info  ("{:>2s} {:>12s} {:>12.3f} {:>12.3f} {:>9d} {:>10.3f} {:>9.3f} {:>9.3f} {:>10.3f} {:>7.1f}".format(pid, '', *self.quantities, *self.times, self.t_ttl, acres_per_second))        
-
-
-
-#     @staticmethod
-#     def log_header (desc):
-#         logger.info  ('')
-#         logger.info  (desc)
-#         logger.info  ('--------------------')
-#         logger.info  ("{:>2s} {:>12s} {:>12s} {:>12s} {:>9s} {:>10s} {:>9s} {:>9s} {:>10s} {:>7s}".format('',      '', 'Mesh ',  'Polygon', '',       'Mesh   ',  'Plant  ', 'Write  ', 'Total  ', 'Acres/'))
-#         logger.info  ("{:>2s} {:>12s} {:>12s} {:>12s} {:>9s} {:>10s} {:>9s} {:>9s} {:>10s} {:>7s}".format('Pr', 'OID', 'Acres',  'Acres  ', 'Plants', 'Seconds',  'Seconds', 'Seconds', 'Seconds', 'Second'))
-
-        
-
-
-
 
 
 def run(in_fc, query, out_fc):
@@ -188,6 +119,7 @@ def run(in_fc, query, out_fc):
         # Reassemble the feature classes
         logger.info('Merging output data')
         for i in range(MP_NUM_CHUNKS):
+            logger.info('Merging output data %i' % (i+1))
             chunk_out_fc = mp_run_spec_list[i][4]
             logger.debug('Appending ' + chunk_out_fc + ' to ' + out_fc)
             arcpy.Append_management(chunk_out_fc, out_fc)
