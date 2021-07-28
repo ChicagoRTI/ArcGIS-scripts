@@ -13,6 +13,8 @@ LOG_FILE = r'E:\PotentialPlantings\pp_log.txt'
 WORK_DIR = r'E:\PotentialPlantings'
 LOG_FILE = os.path.join(WORK_DIR, 'pp_log.txt')
 INTERMEDIATE_GDB = os.path.join(WORK_DIR, 'intermediate_data.gdb')
+OUTPUT_DIR = os.path.join(WORK_DIR, 'output')
+
 
 
 BUILDINGS_EXPAND_TIF = r"E:\PotentialPlantings\data\lindsay_tifs\BuildingsExpand_0_1_one_bit.tif"
@@ -35,10 +37,14 @@ def run(start_point, count):
         if os.path.exists(LOG_FILE):
             os.remove(LOG_FILE)
             
+        community_fcs = list()
+            
         # Process each community past the alphabetical starting point
         for community, acres in __get_communities(start_point, count):
             __log('%i acres' % (acres), community)
-
+            
+            if USE_IN_MEM:
+                arcpy.Delete_management('in_memory')
             
             canopy_clipped = __get_intermediate_name ('canopy_clipped', USE_IN_MEM)
             plantable_region_clipped = __get_intermediate_name ('plantable_region_clipped', USE_IN_MEM)
@@ -50,6 +56,7 @@ def run(start_point, count):
             plantable_muni = __get_intermediate_name ('plantable_muni', USE_IN_MEM)
             plantable_muni_landuse = __get_intermediate_name ('plantable_muni_landuse', USE_IN_MEM)
             plantable_muni_landuse_public = __get_intermediate_name ('plantable_muni_landuse_public', USE_IN_MEM)
+            out_fc = __get_community_output_gdb (community)
                        
             __log ('Getting community boundary', community)
             community_boundary = arcpy.SelectLayerByAttribute_management(MUNI_COMMUNITY_AREA, 'NEW_SELECTION', "COMMUNITY = '%s'" % (community))[0]
@@ -110,16 +117,39 @@ def run(start_point, count):
             __log ('Trim excess fields', community)   
             trim_excess_fields (plantable_muni_landuse_public, ['objectid', 'shape', 'shape_area', 'shape_length', 'landuse', 'public', 'community'])
 
-            # __log ('Add "Community"" field', community)        
-            # arcpy.AddField_management(plantable_muni_landuse_public, "Community", "TEXT", "", "", "", "", "NULLABLE", "NON_REQUIRED", "")
+            __save_community (plantable_muni_landuse_public, out_fc)
+            community_fcs.append (out_fc)
 
+
+        __save_final_output (community_fcs)
+        
+        __log('Complete')
 
 
     except Exception as ex:
         __log ('Exception: %s' % (str(ex)))
         raise ex
+        
 
+def __save_final_output (community_fcs):
+    out_gdb = os.path.join(OUTPUT_DIR, 'AllCommunities' + '.gdb')
+    out_fc = os.path.join(out_gdb, 'plantable')
+    
+    __log ('Preparing final output feature class: %s' % (out_fc))
+    if not arcpy.Exists(out_gdb):
+        arcpy.CreateFileGDB_management(os.path.dirname(out_gdb), os.path.basename(out_gdb))
+    __delete ([out_fc])   
+    sr = arcpy.Describe(community_fcs[0]).spatialReference
+    arcpy.CreateFeatureclass_management(os.path.dirname(out_fc), os.path.basename(out_fc), 'POLYGON', community_fcs[0], "DISABLED", "DISABLED", sr)
 
+    __log ('Write to final output feature class')
+    arcpy.management.Append(community_fcs, out_fc)
+    
+    __log ('Creating index on community name')
+    arcpy.management.AddIndex(r"E:\PotentialPlantings\output\AllCommunities.gdb\plantable", "COMMUNITY", "IDX_Comm", "NON_UNIQUE", "NON_ASCENDING")
+
+    return
+    
 
         
 def __get_communities (start_point, count):
@@ -141,6 +171,16 @@ def  __get_intermediate_name (name, use_in_mem):
         fn = os.path.join(INTERMEDIATE_GDB, name)
     __delete ([fn])
     return fn
+
+
+def  __get_community_output_gdb (community):
+    out_gdb = os.path.join(OUTPUT_DIR, 'communities', community.replace(' ','') + '.gdb')
+    out_fc = os.path.join(out_gdb, 'plantable')
+    if not arcpy.Exists(out_gdb):
+        arcpy.CreateFileGDB_management(os.path.dirname(out_gdb), os.path.basename(out_gdb))
+    __delete ([out_fc])
+    return out_fc
+
 
 
 def __log (text, community = None):
@@ -169,9 +209,17 @@ def trim_excess_fields (fc, keep_fields):
     return
 
 
+def __save_community (in_fc, out_fc):
+    if arcpy.da.Describe(in_fc)['catalogPath'].startswith('in_memory\\'):
+        arcpy.CopyFeatures_management(in_fc, out_fc)
+    else:        
+        arcpy.Copy_management(in_fc, out_fc)
+    return
+
 
 if __name__ == '__main__':
-    run ('', 5)
+#    run ('Albany Park', 1)
+    run ('', 9999)
     
     # if len(sys.argv) == 1:
     #     run('', 9999)
