@@ -4,6 +4,8 @@ import arcpy
 import os
 import multiprocessing
 import configparser
+import shutil
+
 
 import pp.logger
 logger = pp.logger.get('pp_log')
@@ -25,9 +27,9 @@ SUBSET_START_POINT = config['community_subset']['start_point']
 SUBSET_COUNT = int(config['community_subset']['number'])
 
 
-INTERMEDIATE_OUTPUT_GDB = os.path.join(WORK_DIR, 'output/intermediate_data.gdb')
-FINAL_OUTPUT_GDB = os.path.join(WORK_DIR, 'output/all_communities.gdb')
-COMMUNITY_OUTPUT_DIR = os.path.join(WORK_DIR, 'output/community')
+INTERMEDIATE_OUTPUT_DIR = os.path.join(WORK_DIR, r'output\intermediate_data')
+FINAL_OUTPUT_GDB = os.path.join(WORK_DIR, r'output\all_communities.gdb')
+COMMUNITY_OUTPUT_DIR = os.path.join(WORK_DIR, r'output\community')
 
 IN_MEM_ID = 0
 
@@ -35,18 +37,17 @@ OS_PID = os.getpid()
 
 def run():
     __log_info ("Logging to %s" % pp.logger.LOG_FILE)
-       
+    
+    if os.path.isdir(INTERMEDIATE_OUTPUT_DIR):
+        shutil.rmtree(INTERMEDIATE_OUTPUT_DIR)
+    
     os.makedirs(WORK_DIR, exist_ok=True)
-    os.makedirs(os.path.dirname(INTERMEDIATE_OUTPUT_GDB), exist_ok=True)
+    os.makedirs(INTERMEDIATE_OUTPUT_DIR)
     os.makedirs(os.path.dirname(FINAL_OUTPUT_GDB), exist_ok=True)
     os.makedirs(COMMUNITY_OUTPUT_DIR, exist_ok=True)
     
-    if not arcpy.Exists(INTERMEDIATE_OUTPUT_GDB):
-        __delete ([INTERMEDIATE_OUTPUT_GDB])
-        arcpy.CreateFileGDB_management(os.path.dirname(INTERMEDIATE_OUTPUT_GDB), os.path.basename(INTERMEDIATE_OUTPUT_GDB))
     if not arcpy.Exists(FINAL_OUTPUT_GDB):
         arcpy.CreateFileGDB_management(os.path.dirname(FINAL_OUTPUT_GDB), os.path.basename(FINAL_OUTPUT_GDB))
-
     
     communities = __get_communities(SUBSET_START_POINT, SUBSET_COUNT)
     
@@ -74,24 +75,30 @@ def run_mp (community_spec):
         arcpy.env.outputZFlag = "Disabled"
         arcpy.env.outputMFlag = "Disabled"
         arcpy.overwriteOutput = True
-
+        
         # Process each community past the alphabetical starting point
         community, acres, idx = community_spec
         __log_info('%i acres' % (acres), community)
         
         if USE_IN_MEM:
             arcpy.Delete_management('in_memory')
-            
-        canopy_clipped = __get_intermediate_name ('canopy_clipped', idx, USE_IN_MEM)
-        plantable_region_clipped = __get_intermediate_name ('plantable_region_clipped', idx, USE_IN_MEM)
-        buildings_clipped = __get_intermediate_name ('buildings_clipped', idx, USE_IN_MEM)
-        minus_trees = __get_intermediate_name ('minus_trees', idx, USE_IN_MEM)
-        minus_trees_buildings = __get_intermediate_name ('minus_trees_buildings', idx, USE_IN_MEM)
-        plantable_poly = __get_intermediate_name ('plantable_poly', idx, USE_IN_MEM)
-        plantable_single_poly = __get_intermediate_name ('plantable_single_poly', idx, USE_IN_MEM)
-        plantable_muni = __get_intermediate_name ('plantable_muni', idx, USE_IN_MEM)
-        plantable_muni_landuse = __get_intermediate_name ('plantable_muni_landuse', idx, USE_IN_MEM)
-        plantable_muni_landuse_public = __get_intermediate_name ('plantable_muni_landuse_public', idx, USE_IN_MEM)
+            intermediate_output_gdb = None
+        else:
+            intermediate_output_gdb = os.path.join(INTERMEDIATE_OUTPUT_DIR,  'intermediate_%i.gdb' %(OS_PID))
+            if not arcpy.Exists(intermediate_output_gdb):
+                arcpy.CreateFileGDB_management(os.path.dirname(intermediate_output_gdb), os.path.basename(intermediate_output_gdb))
+
+    
+        canopy_clipped = __get_intermediate_name (intermediate_output_gdb, 'canopy_clipped', idx, USE_IN_MEM)
+        plantable_region_clipped = __get_intermediate_name (intermediate_output_gdb, 'plantable_region_clipped', idx, USE_IN_MEM)
+        buildings_clipped = __get_intermediate_name (intermediate_output_gdb, 'buildings_clipped', idx, USE_IN_MEM)
+        minus_trees = __get_intermediate_name (intermediate_output_gdb, 'minus_trees', idx, USE_IN_MEM)
+        minus_trees_buildings = __get_intermediate_name (intermediate_output_gdb, 'minus_trees_buildings', idx, USE_IN_MEM)
+        plantable_poly = __get_intermediate_name (intermediate_output_gdb, 'plantable_poly', idx, USE_IN_MEM)
+        plantable_single_poly = __get_intermediate_name (intermediate_output_gdb, 'plantable_single_poly', idx, USE_IN_MEM)
+        plantable_muni = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni', idx, USE_IN_MEM)
+        plantable_muni_landuse = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni_landuse', idx, USE_IN_MEM)
+        plantable_muni_landuse_public = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni_landuse_public', idx, USE_IN_MEM)
         out_fc = __get_community_output_gdb (community)
                    
         __log_debug ('Getting community boundary', community)
@@ -151,6 +158,7 @@ def run_mp (community_spec):
         trim_excess_fields (plantable_muni_landuse_public, ['objectid', 'shape', 'shape_area', 'shape_length', 'landuse', 'public', 'community'])
     
         __save_community (plantable_muni_landuse_public, out_fc)
+        __delete( [plantable_muni_landuse_public] )
 
             
     except Exception as ex:
@@ -160,28 +168,6 @@ def run_mp (community_spec):
     return out_fc
       
 
-
-        
-# def __get_communities (start_point, count):
-#     communities = []
-#     idx = 0
-#     with arcpy.da.SearchCursor(MUNI_COMMUNITY_AREA, ['COMMUNITY', 'SHAPE@']) as cursor:
-#         for attr_vals in cursor:
-#             communities.append( (attr_vals[0], int(attr_vals[1].getArea('PLANAR', 'ACRES')), idx) )
-#             idx = idx + 1
-
-#     community_names = [c[0] for c in communities]
-#     if len(community_names) != len(set(community_names)):
-#         raise Exception ("Duplicate community names: %s" % str(community_names))
-        
-#     communities_sorted = [c for c in sorted(communities) if c[0].lower() >= start_point.lower()][0:count]       
-    
-#     communities = []
-#     idx = 0
-#     for s in communities_sorted:
-#         communities.append ( (s[0], s[1], idx))
-#         idx = idx + 1
-#     return communities
     
         
 def __get_communities (start_point, count):
@@ -199,16 +185,15 @@ def __get_communities (start_point, count):
 
 
 
-def  __get_intermediate_name (name, idx, use_in_mem):
+def  __get_intermediate_name (intermediate_output_gdb, name, idx, use_in_mem):
     global IN_MEM_ID
     
     if use_in_mem:
         IN_MEM_ID = IN_MEM_ID + 1
         fn = os.path.join('in_memory', name[0:3] + '_%i' % idx + '_' +  str(IN_MEM_ID))
     else:
-        fn = os.path.join(INTERMEDIATE_OUTPUT_GDB, name + '_%i' % idx )
+        fn = os.path.join(intermediate_output_gdb, name + '_%i' % idx )
     __delete ([fn])
-#    __log_debug ('Intermediate file: %s' % (fn))
     return fn
 
 
@@ -243,7 +228,6 @@ def __log (text, is_debug, community = None):
 
 def __delete (obj_list):
     for obj in obj_list:
-#        __log_debug ('Deleting file: %s' % (str(obj)))
         arcpy.Delete_management(obj)
     return
 
@@ -267,8 +251,6 @@ def __save_final_output (community_fcs):
     out_fc = os.path.join(FINAL_OUTPUT_GDB, 'plantable')
     
     __log_debug ('Preparing final output feature class: %s' % (out_fc))
-    # if not arcpy.Exists(FINAL_OUTPUT_GDB):
-    #     arcpy.CreateFileGDB_management(os.path.dirname(FINAL_OUTPUT_GDB), os.path.basename(FINAL_OUTPUT_GDB))
     __delete ([out_fc])   
     sr = arcpy.Describe(community_fcs[0]).spatialReference
     arcpy.CreateFeatureclass_management(os.path.dirname(out_fc), os.path.basename(out_fc), 'POLYGON', community_fcs[0], "DISABLED", "DISABLED", sr)
