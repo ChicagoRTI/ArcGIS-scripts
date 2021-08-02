@@ -148,7 +148,8 @@ def run_mp (community_spec):
         arcpy.management.CalculateField(plantable_muni_landuse_public, "Community", '"%s"' % (community), "PYTHON3", "", "TEXT")
     
         __log_debug ('Add and populate the "Public" field', community)   
-        arcpy.management.CalculateField(plantable_muni_landuse_public, "Public", "is_public(!FID_Public!)", "PYTHON3", r"""def is_public (fid):
+#        arcpy.management.CalculateField(plantable_muni_landuse_public, "Public", "is_public(!FID_Public!)", "PYTHON3", r"""def is_public (fid):
+        arcpy.management.CalculateField(plantable_muni_landuse_public, "Public", "is_public(!FID_%s!)" % (os.path.basename(PUBLIC_LAND)), "PYTHON3", r"""def is_public (fid):
             if fid == -1:
                 return 0
             else:
