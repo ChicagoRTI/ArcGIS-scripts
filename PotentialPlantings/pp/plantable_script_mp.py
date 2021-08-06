@@ -80,7 +80,9 @@ def run_mp (community_spec):
         community, acres, idx = community_spec
         __log_info('%i acres' % (acres), community)
         
-        if USE_IN_MEM:
+        use_in_mem = USE_IN_MEM if community != 'CHICAGO TWSHP' else False
+        
+        if use_in_mem:
             arcpy.Delete_management('in_memory')
             intermediate_output_gdb = None
         else:
@@ -89,16 +91,16 @@ def run_mp (community_spec):
                 arcpy.CreateFileGDB_management(os.path.dirname(intermediate_output_gdb), os.path.basename(intermediate_output_gdb))
 
     
-        canopy_clipped = __get_intermediate_name (intermediate_output_gdb, 'canopy_clipped', idx, USE_IN_MEM)
-        plantable_region_clipped = __get_intermediate_name (intermediate_output_gdb, 'plantable_region_clipped', idx, USE_IN_MEM)
-        buildings_clipped = __get_intermediate_name (intermediate_output_gdb, 'buildings_clipped', idx, USE_IN_MEM)
-        minus_trees = __get_intermediate_name (intermediate_output_gdb, 'minus_trees', idx, USE_IN_MEM)
-        minus_trees_buildings = __get_intermediate_name (intermediate_output_gdb, 'minus_trees_buildings', idx, USE_IN_MEM)
-        plantable_poly = __get_intermediate_name (intermediate_output_gdb, 'plantable_poly', idx, USE_IN_MEM)
-        plantable_single_poly = __get_intermediate_name (intermediate_output_gdb, 'plantable_single_poly', idx, USE_IN_MEM)
-        plantable_muni = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni', idx, USE_IN_MEM)
-        plantable_muni_landuse = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni_landuse', idx, USE_IN_MEM)
-        plantable_muni_landuse_public = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni_landuse_public', idx, USE_IN_MEM)
+        canopy_clipped = __get_intermediate_name (intermediate_output_gdb, 'canopy_clipped', idx, use_in_mem)
+        plantable_region_clipped = __get_intermediate_name (intermediate_output_gdb, 'plantable_region_clipped', idx, use_in_mem)
+        buildings_clipped = __get_intermediate_name (intermediate_output_gdb, 'buildings_clipped', idx, use_in_mem)
+        minus_trees = __get_intermediate_name (intermediate_output_gdb, 'minus_trees', idx, use_in_mem)
+        minus_trees_buildings = __get_intermediate_name (intermediate_output_gdb, 'minus_trees_buildings', idx, use_in_mem)
+        plantable_poly = __get_intermediate_name (intermediate_output_gdb, 'plantable_poly', idx, use_in_mem)
+        plantable_single_poly = __get_intermediate_name (intermediate_output_gdb, 'plantable_single_poly', idx, use_in_mem)
+        plantable_muni = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni', idx, use_in_mem)
+        plantable_muni_landuse = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni_landuse', idx, use_in_mem)
+        plantable_muni_landuse_public = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni_landuse_public', idx, use_in_mem)
         out_fc = __get_community_output_gdb (community)
                    
         __log_debug ('Getting community boundary', community)
@@ -124,6 +126,9 @@ def run_mp (community_spec):
         __log_debug ('Converting raster to polygon', community)        
         arcpy.RasterToPolygon_conversion(minus_trees_buildings, plantable_poly, "SIMPLIFY", "", "SINGLE_OUTER_PART", "")
         __delete( [minus_trees_buildings] )
+
+        __log_debug ('Repair invalid features', community)        
+        arcpy.management.RepairGeometry(plantable_poly, "DELETE_NULL", "ESRI")
     
         __log_debug ('Converting multipart polygons to singlepart', community)        
         arcpy.MultipartToSinglepart_management(plantable_poly, plantable_single_poly)            
@@ -131,10 +136,10 @@ def run_mp (community_spec):
     
         __log_debug ('Spatial join', community)        
         arcpy.SpatialJoin_analysis(plantable_single_poly, MUNI_COMMUNITY_AREA, plantable_muni, "JOIN_ONE_TO_ONE", "KEEP_ALL", "", "INTERSECT", "", "")
+        __delete( [plantable_single_poly] )
     
         __log_debug ('Repair invalid features', community)        
         arcpy.management.RepairGeometry(plantable_muni, "DELETE_NULL", "ESRI")
-        __delete( [plantable_single_poly] )
     
         __log_debug ('Identify plantable land', community)        
         arcpy.Identity_analysis(plantable_muni, LAND_USE_2015, plantable_muni_landuse, "ALL", "", "NO_RELATIONSHIPS")
