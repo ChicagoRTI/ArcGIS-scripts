@@ -31,6 +31,28 @@ INTERMEDIATE_OUTPUT_DIR = os.path.join(WORK_DIR, r'output\intermediate_data')
 FINAL_OUTPUT_GDB = os.path.join(WORK_DIR, r'output\all_communities.gdb')
 COMMUNITY_OUTPUT_DIR = os.path.join(WORK_DIR, r'output\community')
 
+FINAL_OUTPUT_LANDUSE_COL = 'LandUse'
+FINAL_OUTPUT_PUBLIC_PRIVATE_COL = 'Public'
+FINAL_OUTPUT_COMMUNITY_COL = 'CommunityID'
+
+
+LANDUSE_DOMAIN_NAME = 'Land Use'
+LANDUSE_DOMAIN = {'Ag': 1,
+                  'Commercial': 2,
+                  'Industrial': 3,
+                  'Institutional': 4,
+                  'OpenSpace': 5,
+                  'Residential': 6,
+                  'Transit': 7,
+                  'Vacant': 8,
+                  'Water': 9,
+                  'Other': 10}
+
+PUBLIC_PRIVATE_DOMAIN_NAME = 'PublicPrivate'
+PUBLIC_PRIVATE_DOMAIN = {'Public': 0, 'Private': 1}
+
+COMMUNITY_DOMAIN_NAME = 'Community Name'
+
 IN_MEM_ID = 0
 
 OS_PID = os.getpid()
@@ -48,7 +70,10 @@ def run():
     
     if not arcpy.Exists(FINAL_OUTPUT_GDB):
         arcpy.CreateFileGDB_management(os.path.dirname(FINAL_OUTPUT_GDB), os.path.basename(FINAL_OUTPUT_GDB))
-    
+        __create_db_domain (FINAL_OUTPUT_GDB, LANDUSE_DOMAIN_NAME, LANDUSE_DOMAIN, 'SHORT')
+        __create_db_domain (FINAL_OUTPUT_GDB, PUBLIC_PRIVATE_DOMAIN_NAME, PUBLIC_PRIVATE_DOMAIN, 'SHORT')
+        __create_db_domain_from_table (FINAL_OUTPUT_GDB, COMMUNITY_DOMAIN_NAME, MUNI_COMMUNITY_AREA, "Community", "OBJECTID")
+           
     communities = __get_communities(SUBSET_START_POINT, SUBSET_COUNT)
     
     if PROCESSORS > 1:
@@ -138,10 +163,7 @@ def run_mp (community_spec):
         arcpy.SpatialJoin_analysis(plantable_single_poly, MUNI_COMMUNITY_AREA, plantable_muni, "JOIN_ONE_TO_ONE", "KEEP_ALL", "", "INTERSECT", "", "")
         __delete( [plantable_single_poly] )
     
-        __log_debug ('Repair invalid features', community)        
-        arcpy.management.RepairGeometry(plantable_muni, "DELETE_NULL", "ESRI")
-    
-        __log_debug ('Identify plantable land', community)        
+        __log_debug ('Identify land use', community)        
         arcpy.Identity_analysis(plantable_muni, LAND_USE_2015, plantable_muni_landuse, "ALL", "", "NO_RELATIONSHIPS")
         __delete( [plantable_muni] )
     
@@ -149,19 +171,18 @@ def run_mp (community_spec):
         arcpy.Identity_analysis(plantable_muni_landuse, PUBLIC_LAND, plantable_muni_landuse_public, "ALL", "", "NO_RELATIONSHIPS")
         __delete( [plantable_muni_landuse] )
     
-        __log_debug ('Add and populate the "Community" field', community)   
-        arcpy.management.CalculateField(plantable_muni_landuse_public, "Community", '"%s"' % (community), "PYTHON3", "", "TEXT")
+        __log_debug ('Add and populate the "CommunityID" field', community)   
+        arcpy.management.CalculateField(plantable_muni_landuse_public, FINAL_OUTPUT_COMMUNITY_COL, '%i' % (idx), "PYTHON3", "", "LONG")
     
         __log_debug ('Add and populate the "Public" field', community)   
-#        arcpy.management.CalculateField(plantable_muni_landuse_public, "Public", "is_public(!FID_Public!)", "PYTHON3", r"""def is_public (fid):
-        arcpy.management.CalculateField(plantable_muni_landuse_public, "Public", "is_public(!FID_%s!)" % (os.path.basename(PUBLIC_LAND)), "PYTHON3", r"""def is_public (fid):
+        arcpy.management.CalculateField(plantable_muni_landuse_public, FINAL_OUTPUT_PUBLIC_PRIVATE_COL, "is_public(!FID_%s!)" % (os.path.basename(PUBLIC_LAND)), "PYTHON3", r"""def is_public (fid):
             if fid == -1:
                 return 0
             else:
                 return 1""", "SHORT")
     
         __log_debug ('Trim excess fields', community)   
-        trim_excess_fields (plantable_muni_landuse_public, ['objectid', 'shape', 'shape_area', 'shape_length', 'landuse', 'public', 'community'])
+        trim_excess_fields (plantable_muni_landuse_public, ['objectid', 'shape', 'shape_area', 'shape_length', FINAL_OUTPUT_LANDUSE_COL, FINAL_OUTPUT_PUBLIC_PRIVATE_COL, FINAL_OUTPUT_COMMUNITY_COL])
     
         __save_community (plantable_muni_landuse_public, out_fc)
         __delete( [plantable_muni_landuse_public] )
@@ -178,7 +199,7 @@ def run_mp (community_spec):
         
 def __get_communities (start_point, count):
     communities = []
-    with arcpy.da.SearchCursor(MUNI_COMMUNITY_AREA, ['FID', 'COMMUNITY', 'SHAPE@']) as cursor:
+    with arcpy.da.SearchCursor(MUNI_COMMUNITY_AREA, ['OBJECTID', 'COMMUNITY', 'SHAPE@']) as cursor:
         for attr_vals in cursor:
             communities.append( (attr_vals[1], int(attr_vals[2].getArea('PLANAR', 'ACRES')), attr_vals[0]) )
 
@@ -223,7 +244,6 @@ def __log (text, is_debug, community = None):
         t = "%i: %s" % (OS_PID, text)
     else:
         t ="%i %s: %s" % (OS_PID, community, text)
-    #print (t)
     if is_debug:
         logger.debug(t)
     else:
@@ -265,9 +285,31 @@ def __save_final_output (community_fcs):
     arcpy.management.Append(community_fcs, out_fc)
     
     __log_info ('Creating index on community name')
-    arcpy.management.AddIndex(out_fc, "COMMUNITY", "IDX_Comm", "NON_UNIQUE", "NON_ASCENDING")
+    arcpy.management.AddIndex(out_fc, FINAL_OUTPUT_COMMUNITY_COL, "IDX_Comm", "NON_UNIQUE", "NON_ASCENDING")
 
+    __log_info ('Creating index on land use')
+    arcpy.management.AddIndex(out_fc, FINAL_OUTPUT_LANDUSE_COL, "IDX_LandUse", "NON_UNIQUE", "NON_ASCENDING")
+    
+    __log_info ('Assigning domains')
+    arcpy.management.AssignDomainToField(out_fc, FINAL_OUTPUT_LANDUSE_COL, LANDUSE_DOMAIN_NAME)
+    arcpy.management.AssignDomainToField(out_fc, FINAL_OUTPUT_PUBLIC_PRIVATE_COL, PUBLIC_PRIVATE_DOMAIN_NAME)
+    arcpy.management.AssignDomainToField(out_fc, FINAL_OUTPUT_COMMUNITY_COL, COMMUNITY_DOMAIN_NAME)
+    
     return
+
+
+def __create_db_domain (workspace, domain_name, dict_, type_):
+    arcpy.management.CreateDomain(workspace, domain_name, None, type_, 'CODED')
+    for d in dict_.keys():
+        arcpy.management.AddCodedValueToDomain(workspace, domain_name, dict_[d], d)
+    return
+
+
+def __create_db_domain_from_table (workspace, domain_name, src_table, src_desc_col, src_val_col):
+    arcpy.management.TableToDomain(src_table, src_val_col, src_desc_col, workspace, domain_name, domain_name, "REPLACE")
+    return
+
+
     
 
 if __name__ == '__main__':
