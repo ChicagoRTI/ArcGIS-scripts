@@ -14,6 +14,12 @@ cfg_fn = os.path.normpath(__file__ + '/../../local/plantable_script.properties')
 config = configparser.ConfigParser()
 config.read(cfg_fn)
 
+IS_CREATE_SPACES = bool(int(config['actions']['create_space_feature_classes']))
+IS_COMBINE_SPACES = bool(int(config['actions']['combine_space_feature_classes']))
+IS_CREATE_TREES = bool(int(config['actions']['create_tree_site_feature_classes']))
+IS_COMBINE_TREES = bool(int(config['actions']['combine_tree_site_feature_classes']))
+
+
 PROCESSORS = int(config['runtime']['processors'])
 USE_IN_MEM = bool(int(config['runtime']['is_use_in_mem']))
 WORK_DIR = config['runtime']['work_dir']
@@ -67,26 +73,22 @@ def run():
     os.makedirs(INTERMEDIATE_OUTPUT_DIR)
     os.makedirs(os.path.dirname(FINAL_OUTPUT_GDB), exist_ok=True)
     os.makedirs(COMMUNITY_OUTPUT_DIR, exist_ok=True)
-    
-    if not arcpy.Exists(FINAL_OUTPUT_GDB):
-        arcpy.CreateFileGDB_management(os.path.dirname(FINAL_OUTPUT_GDB), os.path.basename(FINAL_OUTPUT_GDB))
-        __create_db_domain (FINAL_OUTPUT_GDB, LANDUSE_DOMAIN_NAME, LANDUSE_DOMAIN, 'SHORT')
-        __create_db_domain (FINAL_OUTPUT_GDB, PUBLIC_PRIVATE_DOMAIN_NAME, PUBLIC_PRIVATE_DOMAIN, 'SHORT')
-        __create_db_domain_from_table (FINAL_OUTPUT_GDB, COMMUNITY_DOMAIN_NAME, MUNI_COMMUNITY_AREA, "Community", "OBJECTID")
-           
+              
     communities = __get_communities(SUBSET_START_POINT, SUBSET_COUNT)
     
-    if PROCESSORS > 1:
-        p = multiprocessing.Pool(PROCESSORS)
-        community_fcs = p.map(run_mp, communities, 1)
-        p.close()        
-    else:
-        # Process each community past the alphabetical starting point
-        community_fcs = list()
-        for community in communities:
-            community_fcs.append (run_mp (community))
-
-    __save_final_output (community_fcs)
+    if IS_CREATE_SPACES:
+        if PROCESSORS > 1:
+            p = multiprocessing.Pool(PROCESSORS)
+            community_fcs = p.map(run_mp, communities, 1)
+            p.close()        
+        else:
+            # Process each community past the alphabetical starting point
+            community_fcs = list()
+            for community in communities:
+                community_fcs.append (run_mp (community))
+                
+    if IS_COMBINE_SPACES:               
+        __save_final_output (community_fcs)
     
     __log_info('Complete')
     return
@@ -229,6 +231,7 @@ def  __get_community_output_gdb (community):
     out_fc = os.path.join(out_gdb, 'plantable')
     if not arcpy.Exists(out_gdb):
         arcpy.CreateFileGDB_management(os.path.dirname(out_gdb), os.path.basename(out_gdb))
+        __create_domains (out_gdb)
     __delete ([out_fc])
     return out_fc
 
@@ -270,44 +273,62 @@ def __save_community (in_fc, out_fc):
         arcpy.CopyFeatures_management(in_fc, out_fc)
     else:        
         arcpy.Copy_management(in_fc, out_fc)
+    __index_output (out_fc)
+    __assign_domains (out_fc)
     return
 
+def __index_output (out_fc):
+    __log_debug ('Creating index on community name')
+    arcpy.management.AddIndex(out_fc, FINAL_OUTPUT_COMMUNITY_COL, "IDX_Comm", "NON_UNIQUE", "NON_ASCENDING")
+
+    __log_debug ('Creating index on land use')
+    arcpy.management.AddIndex(out_fc, FINAL_OUTPUT_LANDUSE_COL, "IDX_LandUse", "NON_UNIQUE", "NON_ASCENDING")
+
+
+def __assign_domains (out_fc):
+    arcpy.management.AssignDomainToField(out_fc, FINAL_OUTPUT_LANDUSE_COL, LANDUSE_DOMAIN_NAME)
+    arcpy.management.AssignDomainToField(out_fc, FINAL_OUTPUT_PUBLIC_PRIVATE_COL, PUBLIC_PRIVATE_DOMAIN_NAME)
+    arcpy.management.AssignDomainToField(out_fc, FINAL_OUTPUT_COMMUNITY_COL, COMMUNITY_DOMAIN_NAME)    
+    
 
 def __save_final_output (community_fcs):
     out_fc = os.path.join(FINAL_OUTPUT_GDB, 'plantable')
+    
+    if not arcpy.Exists(FINAL_OUTPUT_GDB):
+        arcpy.CreateFileGDB_management(os.path.dirname(FINAL_OUTPUT_GDB), os.path.basename(FINAL_OUTPUT_GDB))
+        __create_domains (FINAL_OUTPUT_GDB)
     
     __log_debug ('Preparing final output feature class: %s' % (out_fc))
     __delete ([out_fc])   
     sr = arcpy.Describe(community_fcs[0]).spatialReference
     arcpy.CreateFeatureclass_management(os.path.dirname(out_fc), os.path.basename(out_fc), 'POLYGON', community_fcs[0], "DISABLED", "DISABLED", sr)
 
+    __log_info ('Indexing output and assigning domains')
+    __index_output (out_fc)
+    __assign_domains (out_fc)
+    
     __log_info ('Write to final output feature class')
     arcpy.management.Append(community_fcs, out_fc)
-    
-    __log_info ('Creating index on community name')
-    arcpy.management.AddIndex(out_fc, FINAL_OUTPUT_COMMUNITY_COL, "IDX_Comm", "NON_UNIQUE", "NON_ASCENDING")
-
-    __log_info ('Creating index on land use')
-    arcpy.management.AddIndex(out_fc, FINAL_OUTPUT_LANDUSE_COL, "IDX_LandUse", "NON_UNIQUE", "NON_ASCENDING")
-    
-    __log_info ('Assigning domains')
-    arcpy.management.AssignDomainToField(out_fc, FINAL_OUTPUT_LANDUSE_COL, LANDUSE_DOMAIN_NAME)
-    arcpy.management.AssignDomainToField(out_fc, FINAL_OUTPUT_PUBLIC_PRIVATE_COL, PUBLIC_PRIVATE_DOMAIN_NAME)
-    arcpy.management.AssignDomainToField(out_fc, FINAL_OUTPUT_COMMUNITY_COL, COMMUNITY_DOMAIN_NAME)
-    
+        
     return
 
 
-def __create_db_domain (workspace, domain_name, dict_, type_):
-    arcpy.management.CreateDomain(workspace, domain_name, None, type_, 'CODED')
-    for d in dict_.keys():
-        arcpy.management.AddCodedValueToDomain(workspace, domain_name, dict_[d], d)
-    return
+def __create_domains (workspace):
+    # Land use
+    arcpy.management.CreateDomain(workspace, LANDUSE_DOMAIN_NAME, None, 'SHORT', 'CODED')
+    for d in LANDUSE_DOMAIN.keys():        
+        arcpy.management.AddCodedValueToDomain(workspace, LANDUSE_DOMAIN_NAME, LANDUSE_DOMAIN[d], d)
+    # Public/Private
+    arcpy.management.CreateDomain(workspace, PUBLIC_PRIVATE_DOMAIN_NAME, None, 'SHORT', 'CODED')
+    for d in PUBLIC_PRIVATE_DOMAIN.keys():
+        arcpy.management.AddCodedValueToDomain(workspace, PUBLIC_PRIVATE_DOMAIN_NAME, PUBLIC_PRIVATE_DOMAIN[d], d)
+    # Community name
+    arcpy.management.CreateDomain(workspace, COMMUNITY_DOMAIN_NAME, None, 'LONG', 'CODED')
+    with arcpy.da.SearchCursor(MUNI_COMMUNITY_AREA, ['OBJECTID', 'Community']) as cursor:
+            for attr_vals in cursor:
+                arcpy.management.AddCodedValueToDomain(workspace, COMMUNITY_DOMAIN_NAME, attr_vals[0], attr_vals[1])
+    return        
 
-
-def __create_db_domain_from_table (workspace, domain_name, src_table, src_desc_col, src_val_col):
-    arcpy.management.TableToDomain(src_table, src_val_col, src_desc_col, workspace, domain_name, domain_name, "REPLACE")
-    return
 
 
     
