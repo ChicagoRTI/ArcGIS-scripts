@@ -74,21 +74,20 @@ def run():
     os.makedirs(os.path.dirname(FINAL_OUTPUT_GDB), exist_ok=True)
     os.makedirs(COMMUNITY_OUTPUT_DIR, exist_ok=True)
               
-    communities = __get_communities(SUBSET_START_POINT, SUBSET_COUNT)
+    community_specs = __get_communities(SUBSET_START_POINT, SUBSET_COUNT)
     
     if IS_CREATE_SPACES:
         if PROCESSORS > 1:
             p = multiprocessing.Pool(PROCESSORS)
-            community_fcs = p.map(run_mp, communities, 1)
+            p.map(run_mp, community_specs, 1)
             p.close()        
         else:
             # Process each community past the alphabetical starting point
-            community_fcs = list()
-            for community in communities:
-                community_fcs.append (run_mp (community))
+            for community_spec in community_specs:
+                run_mp (community_spec)
                 
-    if IS_COMBINE_SPACES:               
-        __save_final_output (community_fcs)
+    if IS_COMBINE_SPACES:              
+        __save_final_output (community_specs)
     
     __log_info('Complete')
     return
@@ -128,7 +127,12 @@ def run_mp (community_spec):
         plantable_muni = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni', idx, use_in_mem)
         plantable_muni_landuse = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni_landuse', idx, use_in_mem)
         plantable_muni_landuse_public = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni_landuse_public', idx, use_in_mem)
-        out_fc = __get_community_output_gdb (community)
+        
+        community_fc = __get_community_fc_name (community)
+        community_gdb = os.path.dirname(community_fc)
+        if not arcpy.Exists(community_gdb):
+            arcpy.CreateFileGDB_management(os.path.dirname(community_gdb), os.path.basename(community_gdb))
+        __delete ([community_fc])
                    
         __log_debug ('Getting community boundary', community)
         community_boundary = arcpy.SelectLayerByAttribute_management(MUNI_COMMUNITY_AREA, 'NEW_SELECTION', "COMMUNITY = '%s'" % (community))[0]
@@ -184,9 +188,9 @@ def run_mp (community_spec):
                 return 1""", "SHORT")
     
         __log_debug ('Trim excess fields', community)   
-        trim_excess_fields (plantable_muni_landuse_public, ['objectid', 'shape', 'shape_area', 'shape_length', FINAL_OUTPUT_LANDUSE_COL, FINAL_OUTPUT_PUBLIC_PRIVATE_COL, FINAL_OUTPUT_COMMUNITY_COL])
+        __trim_excess_fields (plantable_muni_landuse_public, ['objectid', 'shape', 'shape_area', 'shape_length', FINAL_OUTPUT_LANDUSE_COL, FINAL_OUTPUT_PUBLIC_PRIVATE_COL, FINAL_OUTPUT_COMMUNITY_COL])
     
-        __save_community (plantable_muni_landuse_public, out_fc)
+        __save_community (plantable_muni_landuse_public, community_fc)
         __delete( [plantable_muni_landuse_public] )
 
             
@@ -194,7 +198,7 @@ def run_mp (community_spec):
       __log_debug ('Exception: %s' % (str(ex)))
       raise ex
         
-    return out_fc
+    return community_fc
       
 
     
@@ -226,14 +230,10 @@ def  __get_intermediate_name (intermediate_output_gdb, name, idx, use_in_mem):
     return fn
 
 
-def  __get_community_output_gdb (community):
-    out_gdb = os.path.join(COMMUNITY_OUTPUT_DIR, community.replace(' ','') + '.gdb')
-    out_fc = os.path.join(out_gdb, 'plantable')
-    if not arcpy.Exists(out_gdb):
-        arcpy.CreateFileGDB_management(os.path.dirname(out_gdb), os.path.basename(out_gdb))
-        __create_domains (out_gdb)
-    __delete ([out_fc])
-    return out_fc
+def __get_community_fc_name (community):
+    community_gdb = os.path.join(COMMUNITY_OUTPUT_DIR, community.replace(' ','') + '.gdb')
+    community_fc =  os.path.join(community_gdb, 'plantable')
+    return community_fc
 
 
 def __log_info (text, community = None):
@@ -252,7 +252,6 @@ def __log (text, is_debug, community = None):
     else:
         logger.info(t)
     return
-
     
 
 def __delete (obj_list):
@@ -261,7 +260,7 @@ def __delete (obj_list):
     return
 
 
-def trim_excess_fields (fc, keep_fields):
+def __trim_excess_fields (fc, keep_fields):
     all_fields = set([f.name.lower() for f in arcpy.ListFields(fc)])
     keep_fields = set([k.lower() for k in keep_fields])
     arcpy.DeleteField_management(fc, ';'.join(all_fields - keep_fields))
@@ -291,9 +290,10 @@ def __assign_domains (out_fc):
     arcpy.management.AssignDomainToField(out_fc, FINAL_OUTPUT_COMMUNITY_COL, COMMUNITY_DOMAIN_NAME)    
     
 
-def __save_final_output (community_fcs):
-    out_fc = os.path.join(FINAL_OUTPUT_GDB, 'plantable')
-    
+def __save_final_output (community_specs):
+    community_fcs = [__get_community_fc_name (c[0]) for c in community_specs]
+    out_fc = os.path.join(FINAL_OUTPUT_GDB, 'plantable')   
+        
     if not arcpy.Exists(FINAL_OUTPUT_GDB):
         arcpy.CreateFileGDB_management(os.path.dirname(FINAL_OUTPUT_GDB), os.path.basename(FINAL_OUTPUT_GDB))
         __create_domains (FINAL_OUTPUT_GDB)
@@ -303,13 +303,12 @@ def __save_final_output (community_fcs):
     sr = arcpy.Describe(community_fcs[0]).spatialReference
     arcpy.CreateFeatureclass_management(os.path.dirname(out_fc), os.path.basename(out_fc), 'POLYGON', community_fcs[0], "DISABLED", "DISABLED", sr)
 
-    __log_info ('Indexing output and assigning domains')
-    __index_output (out_fc)
-    __assign_domains (out_fc)
-    
     __log_info ('Write to final output feature class')
     arcpy.management.Append(community_fcs, out_fc)
-        
+
+    __log_info ('Indexing output and assigning domains')
+    __index_output (out_fc)
+    __assign_domains (out_fc)        
     return
 
 
