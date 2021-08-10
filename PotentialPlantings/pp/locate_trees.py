@@ -18,12 +18,12 @@ logger = pp.logger.get('pp_log')
 
 
 # Can not run in multiprocessing mode from the Spyder console
-IS_MP = False
+IS_MP = True
 MP_NUM_CHUNKS = 8
 WRITE_TO_DEBUG_MESH_FC = False
 
 #OPENINGS_FC = 'opening_single'
-OPENINGS_FC = 'PP_TEST_openings'
+#OPENINGS_FC = 'PP_TEST_openings'
 #OPENINGS_FC = 'campus_parks_projected'
 #OPENINGS_FC = 'chicago_parks_single_tiny'
 #OPENINGS_FC = 'PP_TEST_chicago_parks'
@@ -32,7 +32,7 @@ OPENINGS_FC = 'PP_TEST_openings'
 #OPENINGS_FC = 'PP_TEST_pp__swi_spaces_projected'
 
 DB_DIR = r'C:\Users\dmorrison\AppData\Roaming\ESRI\Desktop10.6\ArcCatalog\ROW Habitat (SDE).SDE'
-OPENINGS_FC = os.path.join(DB_DIR, OPENINGS_FC)
+#OPENINGS_FC = os.path.join(DB_DIR, OPENINGS_FC)
 
 
 #OPENINGS_FC = os.path.join(r'C:\Git_Repository\CRTI\ArcGIS-scripts\PotentialPlantings\pp\data\test.gdb', OPENINGS_FC)
@@ -74,29 +74,31 @@ TREE_FOOTPRINT_DIM = {SMALL:  1,
                       BIG:    5}
 
 
-def run(in_fc, query, out_fc):
+def run(in_fc, query, out_template_fc, out_fc):
     logger.info ("Logging to %s" % pp.logger.LOG_FILE)
     start_time = timeit.default_timer()
+    community_name = os.path.basename(os.path.splitext(os.path.dirname(in_fc))[0])
     
     if arcpy.Exists(out_fc):
         arcpy.Delete_management(out_fc)
     arcpy.CreateFeatureclass_management(os.path.dirname(out_fc),
                                         os.path.basename(out_fc),
                                         "POINT",
-                                        PLANTS_TEMPLATE_FC,
+                                        out_template_fc,
                                         "DISABLED", 
                                         "DISABLED", 
-                                        PLANTS_TEMPLATE_FC)
+                                        out_template_fc)
     
     if IS_MP:
-        logger.info('Launching ' + str(MP_NUM_CHUNKS) + ' worker processes')
+        logger.info('Launching ' + str(MP_NUM_CHUNKS) + ' worker processes: %s' % (community_name))
         StatsAccumulator.log_header('Feature statistics')
         
         # Create the set of tuples - each worker process gets one tuple for input        
         mp_run_spec_list = [(MP_NUM_CHUNKS, 
                               i,
                               in_fc,
-                              ' AND '.join(filter(None,(query, "((OBJECTID %% %i) - %i = 0)" % (MP_NUM_CHUNKS, i)))),                             
+#                              ' AND '.join(filter(None,(query, "((OBJECTID %% %i) - %i = 0)" % (MP_NUM_CHUNKS, i)))),                             
+                              ' AND '.join(filter(None,(query, "(MOD(OBJECTID,%i) - %i = 0)" % (MP_NUM_CHUNKS, i)))),                             
                               MP_TEMP_OUT_FC_ROOT + '_' + str(i)) for i in range(MP_NUM_CHUNKS)]
         for i in range(MP_NUM_CHUNKS):
             chunk_out_fc = mp_run_spec_list[i][4]
@@ -117,7 +119,7 @@ def run(in_fc, query, out_fc):
         app_stats.log_accumulation(None)           
             
         # Reassemble the feature classes
-        logger.info('Merging output data')
+        logger.info('Merging output data: %s' % (community_name))
         for i in range(MP_NUM_CHUNKS):
             logger.info('Merging output data %i' % (i+1))
             chunk_out_fc = mp_run_spec_list[i][4]
@@ -126,7 +128,7 @@ def run(in_fc, query, out_fc):
             arcpy.Delete_management(chunk_out_fc)
             
     else:
-        StatsAccumulator.log_header('Feature statistics')
+        StatsAccumulator.log_header('Feature statistics: %s' % (community_name))
         process_stats = run_mp ( (1, 0, in_fc, query, out_fc) )
         StatsAccumulator.log_header('Totals')
         process_stats.log_accumulation(0)
@@ -145,8 +147,8 @@ def run_mp (run_spec):
     process_stats = StatsAccumulator()
         
     logger.debug  ("Calculating points")
-    with arcpy.da.SearchCursor(input_fc, ['OBJECTID', 'SHAPE@', 'Community'], query) as cursor:
-        for oid, polygon, community in cursor:
+    with arcpy.da.SearchCursor(input_fc, ['OBJECTID', 'SHAPE@', 'CommunityID', 'LandUse', 'Public'], query) as cursor:
+        for oid, polygon, community, land_use, is_public in cursor:
             feature_stats = StatsTimer()
             x_min, y_min, x_max, y_max = polygon.extent.XMin, polygon.extent.YMin, polygon.extent.XMax, polygon.extent.YMax 
 
@@ -162,7 +164,7 @@ def run_mp (run_spec):
             if mesh_type == MESH_ALGORITHM_SMALL:
                 mesh = [m[:] for m in [[VACANT] * mesh_col_dim] * mesh_row_dim] 
             elif mesh_type == MESH_ALGORITHM_BIG: 
-                mesh = __get_mesh (mesh_row_dim, mesh_col_dim, polygon, nw_corner)
+                mesh = __get_mesh (mesh_row_dim, mesh_col_dim, polygon, nw_corner, input_fc)
             feature_stats.record(StatsTimer.MESH_CREATE_END)
             
             plant_points = dict()
@@ -176,9 +178,9 @@ def run_mp (run_spec):
                                 __occupy_footprint (mesh, *fp, row, col, tree_category)
             feature_stats.record(StatsTimer.FIND_SITES_END)
 
-            with arcpy.da.InsertCursor(output_fc, ['SHAPE@', 'code', 'p_oid', 'community']) as cursor:
+            with arcpy.da.InsertCursor(output_fc, ['SHAPE@', 'code', 'p_oid', 'community_id', 'land_use', 'is_public']) as cursor:
                 for row,col in plant_points.keys():
-                    cursor.insertRow([plant_points[(row,col)], mesh[row][col], oid, community])
+                    cursor.insertRow([plant_points[(row,col)], mesh[row][col], oid, community, land_use, is_public])
             feature_stats.record(StatsTimer.WRITE_SITES_END)
             process_stats.accumulate (feature_stats, my_chunk, oid, mesh_row_dim * mesh_col_dim * MIN_DIAMETER * MIN_DIAMETER * 0.000247105, polygon.getArea('PLANAR', 'ACRES'), len(plant_points))
 
@@ -267,7 +269,7 @@ def __occupy_footprint (mesh, fp_row, fp_col, fp_row_dim, fp_col_dim, planting_r
 
 
 
-def __get_mesh (mesh_row_dim, mesh_col_dim, polygon, nw_corner):
+def __get_mesh (mesh_row_dim, mesh_col_dim, polygon, nw_corner, input_fc):
          
     # Lincoln park take  160 minutes vs 4 minutes with this algorithm    
     FISHNET_POLYLINE_FC = os.path.join('in_memory', 'fishnet_polyline')
@@ -280,7 +282,7 @@ def __get_mesh (mesh_row_dim, mesh_col_dim, polygon, nw_corner):
     x_max = nw_corner.X + (mesh_col_dim * MIN_DIAMETER) 
     y_max = nw_corner.Y 
 
-    arcpy.env.outputCoordinateSystem = arcpy.Describe(OPENINGS_FC).spatialReference
+    arcpy.env.outputCoordinateSystem = arcpy.Describe(input_fc).spatialReference
            
     arcpy.management.CreateFishnet(FISHNET_POLYLINE_FC, 
                                     '%f %f' % (x_min, y_min), 
@@ -295,7 +297,7 @@ def __get_mesh (mesh_row_dim, mesh_col_dim, polygon, nw_corner):
                                     'POLYLINE')
 
     # Create feature class with the input polygon
-    arcpy.CreateFeatureclass_management(os.path.dirname(POLYGON_FC), os.path.basename(POLYGON_FC), "POLYGON", OPENINGS_FC)
+    arcpy.CreateFeatureclass_management(os.path.dirname(POLYGON_FC), os.path.basename(POLYGON_FC), "POLYGON", input_fc)
     
     with arcpy.da.InsertCursor(POLYGON_FC, ['SHAPE@']) as cursor:
         cursor.insertRow([polygon])
@@ -342,7 +344,10 @@ def __get_mesh_algorithm (mesh_row_dim, mesh_col_dim, polygon):
 
 
 if __name__ == '__main__':
-    run(OPENINGS_FC, None, PLANTS_FC)
+    run(r'E:\PotentialPlantings\output\community\union.gdb\plantable', 
+        None,
+        r'E:\PotentialPlantings\data\templates\templates.gdb\trees',
+        r'E:\PotentialPlantings\output\community\union.gdb\trees')
     
     
 

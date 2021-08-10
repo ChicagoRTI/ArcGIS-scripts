@@ -6,6 +6,7 @@ import multiprocessing
 import configparser
 import shutil
 
+import pp.locate_trees
 
 import pp.logger
 logger = pp.logger.get('pp_log')
@@ -16,8 +17,9 @@ config.read(cfg_fn)
 
 IS_CREATE_SPACES = bool(int(config['actions']['create_space_feature_classes']))
 IS_COMBINE_SPACES = bool(int(config['actions']['combine_space_feature_classes']))
-IS_CREATE_TREES = bool(int(config['actions']['create_tree_site_feature_classes']))
+IS_CREATE_TREES = bool(int(config['actions']['create_tree_feature_classes']))
 IS_COMBINE_TREES = bool(int(config['actions']['combine_tree_site_feature_classes']))
+IS_SCRATCH_COMBINED_FCS = bool(int(config['actions']['scratch_combined_feature_classes']))
 
 
 PROCESSORS = int(config['runtime']['processors'])
@@ -29,17 +31,27 @@ PLANTABLE_REGION_TIF = config['input_data']['plantable_region_tif']
 MUNI_COMMUNITY_AREA =config['input_data']['muni_community_area']
 LAND_USE_2015 = config['input_data']['land_use_2015']
 PUBLIC_LAND = config['input_data']['public_land']
+TREE_TEMPLATE_FC = config['input_data']['tree_template_fc']
+
+
+
 SUBSET_START_POINT = config['community_subset']['start_point']
 SUBSET_COUNT = int(config['community_subset']['number'])
 
 
 INTERMEDIATE_OUTPUT_DIR = os.path.join(WORK_DIR, r'output\intermediate_data')
-FINAL_OUTPUT_GDB = os.path.join(WORK_DIR, r'output\all_communities.gdb')
-COMMUNITY_OUTPUT_DIR = os.path.join(WORK_DIR, r'output\community')
+COMMUNITY_OUTPUT_DIR = os.path.join(WORK_DIR, r'output\communities')
+COMBINED_SPACES_OUTPUT_GDB = os.path.join(WORK_DIR, r'output\combined_spaces.gdb')
+COMBINED_TREES_OUTPUT_GDB = os.path.join(WORK_DIR, r'output\combined_trees.gdb')
 
-FINAL_OUTPUT_LANDUSE_COL = 'LandUse'
-FINAL_OUTPUT_PUBLIC_PRIVATE_COL = 'Public'
-FINAL_OUTPUT_COMMUNITY_COL = 'CommunityID'
+SPACES_LANDUSE_COL = 'LandUse'
+SPACES_PUBLIC_PRIVATE_COL = 'Public'
+SPACES_COMMUNITY_COL = 'CommunityID'
+
+TREES_LANDUSE_COL = 'land_use'
+TREES_PUBLIC_PRIVATE_COL = 'is_public'
+TREES_COMMUNITY_COL = 'community_id'
+TREES_SIZE_COL = 'code'
 
 
 LANDUSE_DOMAIN_NAME = 'Land Use'
@@ -59,6 +71,9 @@ PUBLIC_PRIVATE_DOMAIN = {'Public': 0, 'Private': 1}
 
 COMMUNITY_DOMAIN_NAME = 'Community Name'
 
+TREE_SIZE_DOMAIN_NAME = 'Tree Size'
+TREE_SIZE_DOMAIN = {'Small': 0, 'Medium': 1, 'Large': 2}
+
 IN_MEM_ID = 0
 
 OS_PID = os.getpid()
@@ -71,7 +86,8 @@ def run():
     
     os.makedirs(WORK_DIR, exist_ok=True)
     os.makedirs(INTERMEDIATE_OUTPUT_DIR)
-    os.makedirs(os.path.dirname(FINAL_OUTPUT_GDB), exist_ok=True)
+    os.makedirs(os.path.dirname(COMBINED_SPACES_OUTPUT_GDB), exist_ok=True)
+    os.makedirs(os.path.dirname(COMBINED_TREES_OUTPUT_GDB), exist_ok=True)
     os.makedirs(COMMUNITY_OUTPUT_DIR, exist_ok=True)
               
     community_specs = __get_communities(SUBSET_START_POINT, SUBSET_COUNT)
@@ -87,9 +103,20 @@ def run():
                 run_mp (community_spec)
                 
     if IS_COMBINE_SPACES:              
-        __save_final_output (community_specs)
+        __combine_spaces_fcs (community_specs)
+        
+    if IS_CREATE_TREES:
+        for community_spec in community_specs:
+            community_spaces_fc = __get_community_spaces_fc_name (community_spec[0])
+            community_trees_fc = __get_community_trees_fc_name (community_spec[0])
+            __delete ([community_trees_fc])           
+            pp.locate_trees.run (community_spaces_fc, None, TREE_TEMPLATE_FC, community_trees_fc)
+            
+                
+    if IS_COMBINE_TREES:              
+        __combine_trees_fcs (community_specs)            
     
-    __log_info('Complete')
+    __log_info('Complete: %s' % ([c[0] for c in community_specs]))
     return
 
 
@@ -128,7 +155,7 @@ def run_mp (community_spec):
         plantable_muni_landuse = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni_landuse', idx, use_in_mem)
         plantable_muni_landuse_public = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni_landuse_public', idx, use_in_mem)
         
-        community_fc = __get_community_fc_name (community)
+        community_fc = __get_community_spaces_fc_name (community)
         community_gdb = os.path.dirname(community_fc)
         if not arcpy.Exists(community_gdb):
             arcpy.CreateFileGDB_management(os.path.dirname(community_gdb), os.path.basename(community_gdb))
@@ -178,17 +205,17 @@ def run_mp (community_spec):
         __delete( [plantable_muni_landuse] )
     
         __log_debug ('Add and populate the "CommunityID" field', community)   
-        arcpy.management.CalculateField(plantable_muni_landuse_public, FINAL_OUTPUT_COMMUNITY_COL, '%i' % (idx), "PYTHON3", "", "LONG")
+        arcpy.management.CalculateField(plantable_muni_landuse_public, SPACES_COMMUNITY_COL, '%i' % (idx), "PYTHON3", "", "SHORT")
     
         __log_debug ('Add and populate the "Public" field', community)   
-        arcpy.management.CalculateField(plantable_muni_landuse_public, FINAL_OUTPUT_PUBLIC_PRIVATE_COL, "is_public(!FID_%s!)" % (os.path.basename(PUBLIC_LAND)), "PYTHON3", r"""def is_public (fid):
+        arcpy.management.CalculateField(plantable_muni_landuse_public, SPACES_PUBLIC_PRIVATE_COL, "is_public(!FID_%s!)" % (os.path.basename(PUBLIC_LAND)), "PYTHON3", r"""def is_public (fid):
             if fid == -1:
                 return 0
             else:
                 return 1""", "SHORT")
     
         __log_debug ('Trim excess fields', community)   
-        __trim_excess_fields (plantable_muni_landuse_public, ['objectid', 'shape', 'shape_area', 'shape_length', FINAL_OUTPUT_LANDUSE_COL, FINAL_OUTPUT_PUBLIC_PRIVATE_COL, FINAL_OUTPUT_COMMUNITY_COL])
+        __trim_excess_fields (plantable_muni_landuse_public, ['objectid', 'shape', 'shape_area', 'shape_length', SPACES_LANDUSE_COL, SPACES_PUBLIC_PRIVATE_COL, SPACES_COMMUNITY_COL])
     
         __save_community (plantable_muni_landuse_public, community_fc)
         __delete( [plantable_muni_landuse_public] )
@@ -213,7 +240,7 @@ def __get_communities (start_point, count):
     if len(community_names) != len(set(community_names)):
         raise Exception ("Duplicate community names: %s" % str(community_names))
         
-    communities_sorted = [c for c in sorted(communities) if c[0].lower() >= start_point.lower()][0:count]       
+    communities_sorted = [c for c in sorted(communities, key=lambda x: x[0].lower()) if c[0].lower() >= start_point.lower()][0:count]        
     return communities_sorted
 
 
@@ -230,9 +257,14 @@ def  __get_intermediate_name (intermediate_output_gdb, name, idx, use_in_mem):
     return fn
 
 
-def __get_community_fc_name (community):
+def __get_community_spaces_fc_name (community):
     community_gdb = os.path.join(COMMUNITY_OUTPUT_DIR, community.replace(' ','') + '.gdb')
     community_fc =  os.path.join(community_gdb, 'plantable')
+    return community_fc
+
+def __get_community_trees_fc_name (community):
+    community_gdb = os.path.join(COMMUNITY_OUTPUT_DIR, community.replace(' ','') + '.gdb')
+    community_fc =  os.path.join(community_gdb, 'trees')
     return community_fc
 
 
@@ -267,48 +299,97 @@ def __trim_excess_fields (fc, keep_fields):
     return
 
 
+
 def __save_community (in_fc, out_fc):
+    temp_out_fc = os.path.join(os.path.dirname(out_fc), os.path.basename(out_fc) + '_projected')
     if arcpy.da.Describe(in_fc)['catalogPath'].startswith('in_memory\\'):
-        arcpy.CopyFeatures_management(in_fc, out_fc)
+        arcpy.CopyFeatures_management(in_fc, temp_out_fc)
     else:        
-        arcpy.Copy_management(in_fc, out_fc)
-    __index_output (out_fc)
-    __assign_domains (out_fc)
+        arcpy.Copy_management(in_fc, temp_out_fc)   
+    arcpy.management.Project(temp_out_fc, out_fc, arcpy.Describe(TREE_TEMPLATE_FC).spatialReference)
+    __delete ([temp_out_fc])
     return
 
-def __index_output (out_fc):
-    __log_debug ('Creating index on community name')
-    arcpy.management.AddIndex(out_fc, FINAL_OUTPUT_COMMUNITY_COL, "IDX_Comm", "NON_UNIQUE", "NON_ASCENDING")
-
-    __log_debug ('Creating index on land use')
-    arcpy.management.AddIndex(out_fc, FINAL_OUTPUT_LANDUSE_COL, "IDX_LandUse", "NON_UNIQUE", "NON_ASCENDING")
 
 
-def __assign_domains (out_fc):
-    arcpy.management.AssignDomainToField(out_fc, FINAL_OUTPUT_LANDUSE_COL, LANDUSE_DOMAIN_NAME)
-    arcpy.management.AssignDomainToField(out_fc, FINAL_OUTPUT_PUBLIC_PRIVATE_COL, PUBLIC_PRIVATE_DOMAIN_NAME)
-    arcpy.management.AssignDomainToField(out_fc, FINAL_OUTPUT_COMMUNITY_COL, COMMUNITY_DOMAIN_NAME)    
+def __combine_spaces_fcs (community_specs):
+    __log_debug ('Combining spaces feature classes')
+    communities  = [c[0] for c in community_specs]
+    community_fcs = [__get_community_spaces_fc_name (c) for c in communities]
+    community_ids = [str(c[2]) for c in community_specs]
     
-
-def __save_final_output (community_specs):
-    community_fcs = [__get_community_fc_name (c[0]) for c in community_specs]
-    out_fc = os.path.join(FINAL_OUTPUT_GDB, 'plantable')   
+    out_fc = os.path.join(COMBINED_SPACES_OUTPUT_GDB, 'plantable')   
         
-    if not arcpy.Exists(FINAL_OUTPUT_GDB):
-        arcpy.CreateFileGDB_management(os.path.dirname(FINAL_OUTPUT_GDB), os.path.basename(FINAL_OUTPUT_GDB))
-        __create_domains (FINAL_OUTPUT_GDB)
+    if not arcpy.Exists(COMBINED_SPACES_OUTPUT_GDB):
+        arcpy.CreateFileGDB_management(os.path.dirname(COMBINED_SPACES_OUTPUT_GDB), os.path.basename(COMBINED_SPACES_OUTPUT_GDB))
+        __create_domains (COMBINED_SPACES_OUTPUT_GDB)
     
-    __log_debug ('Preparing final output feature class: %s' % (out_fc))
-    __delete ([out_fc])   
-    sr = arcpy.Describe(community_fcs[0]).spatialReference
-    arcpy.CreateFeatureclass_management(os.path.dirname(out_fc), os.path.basename(out_fc), 'POLYGON', community_fcs[0], "DISABLED", "DISABLED", sr)
+    if IS_SCRATCH_COMBINED_FCS:
+        __log_debug ('Deleting combined spaces feature class')
+        __delete ([out_fc])
+        
+        
+    if not arcpy.Exists(out_fc):       
+        __log_debug ('Creating combined spaces feature class')
+        sr = arcpy.Describe(community_fcs[0]).spatialReference
+        arcpy.CreateFeatureclass_management(os.path.dirname(out_fc), os.path.basename(out_fc), 'POLYGON', community_fcs[0], "DISABLED", "DISABLED", sr)
+        arcpy.management.AssignDomainToField(out_fc, SPACES_LANDUSE_COL, LANDUSE_DOMAIN_NAME)
+        arcpy.management.AssignDomainToField(out_fc, SPACES_PUBLIC_PRIVATE_COL, PUBLIC_PRIVATE_DOMAIN_NAME)
+        arcpy.management.AssignDomainToField(out_fc, SPACES_COMMUNITY_COL, COMMUNITY_DOMAIN_NAME)         
+        arcpy.management.AddIndex(out_fc, SPACES_COMMUNITY_COL, "IDX_Comm", "NON_UNIQUE", "NON_ASCENDING")
+        arcpy.management.AddIndex(out_fc, SPACES_LANDUSE_COL, "IDX_LandUse", "NON_UNIQUE", "NON_ASCENDING")
+        
+    if not IS_SCRATCH_COMBINED_FCS:        
+        __log_debug ('Deleting existing features in combined spaces feature class')
+        where = "%s IN (%s)" % (SPACES_COMMUNITY_COL, ','.join(community_ids))
+        old_records = arcpy.SelectLayerByAttribute_management(out_fc, 'NEW_SELECTION', where)[0]
+        arcpy.management.DeleteFeatures(old_records)
 
-    __log_info ('Write to final output feature class')
+ 
+    __log_info ('Write to combined spaces feature class')
     arcpy.management.Append(community_fcs, out_fc)
+   
+    return
 
-    __log_info ('Indexing output and assigning domains')
-    __index_output (out_fc)
-    __assign_domains (out_fc)        
+
+
+def __combine_trees_fcs (community_specs):
+    __log_debug ('Combining trees feature classes')
+    communities  = [c[0] for c in community_specs]
+    community_fcs = [__get_community_trees_fc_name (c) for c in communities]
+    community_ids = [str(c[2]) for c in community_specs]
+    
+    out_fc = os.path.join(COMBINED_TREES_OUTPUT_GDB, 'trees')   
+        
+    if not arcpy.Exists(COMBINED_TREES_OUTPUT_GDB):
+        arcpy.CreateFileGDB_management(os.path.dirname(COMBINED_TREES_OUTPUT_GDB), os.path.basename(COMBINED_TREES_OUTPUT_GDB))
+        __create_domains (COMBINED_TREES_OUTPUT_GDB)
+    
+    if IS_SCRATCH_COMBINED_FCS:
+        __log_debug ('Deleting combined trees feature class')
+        __delete ([out_fc])
+        
+    if not arcpy.Exists(out_fc):       
+        __log_debug ('Creating combined trees feature class')
+        sr = arcpy.Describe(community_fcs[0]).spatialReference
+        arcpy.CreateFeatureclass_management(os.path.dirname(out_fc), os.path.basename(out_fc), 'POINT', community_fcs[0], "DISABLED", "DISABLED", sr)
+        arcpy.management.AssignDomainToField(out_fc, TREES_LANDUSE_COL, LANDUSE_DOMAIN_NAME)
+        arcpy.management.AssignDomainToField(out_fc, TREES_PUBLIC_PRIVATE_COL, PUBLIC_PRIVATE_DOMAIN_NAME)
+        arcpy.management.AssignDomainToField(out_fc, TREES_COMMUNITY_COL, COMMUNITY_DOMAIN_NAME)    
+        arcpy.management.AssignDomainToField(out_fc, TREES_SIZE_COL, TREE_SIZE_DOMAIN_NAME) 
+        arcpy.management.AddIndex(out_fc, TREES_COMMUNITY_COL, "IDX_Comm", "NON_UNIQUE", "NON_ASCENDING")
+        arcpy.management.AddIndex(out_fc, TREES_LANDUSE_COL, "IDX_LandUse", "NON_UNIQUE", "NON_ASCENDING")
+        arcpy.management.AddIndex(out_fc, TREES_PUBLIC_PRIVATE_COL, "IDX_PublicPrivate", "NON_UNIQUE", "NON_ASCENDING")
+        
+    if not IS_SCRATCH_COMBINED_FCS:
+        __log_debug ('Deleting existing features in combined trees feature class')
+        where = "%s IN (%s)" % (TREES_COMMUNITY_COL, ','.join(community_ids))
+        old_records = arcpy.SelectLayerByAttribute_management(out_fc, 'NEW_SELECTION', where)[0]
+        arcpy.management.DeleteFeatures(old_records)
+        
+    __log_info ('Write to combined trees feature class')
+    arcpy.management.Append(community_fcs, out_fc)
+   
     return
 
 
@@ -321,8 +402,12 @@ def __create_domains (workspace):
     arcpy.management.CreateDomain(workspace, PUBLIC_PRIVATE_DOMAIN_NAME, None, 'SHORT', 'CODED')
     for d in PUBLIC_PRIVATE_DOMAIN.keys():
         arcpy.management.AddCodedValueToDomain(workspace, PUBLIC_PRIVATE_DOMAIN_NAME, PUBLIC_PRIVATE_DOMAIN[d], d)
+    # Tree size
+    arcpy.management.CreateDomain(workspace, TREE_SIZE_DOMAIN_NAME, None, 'SHORT', 'CODED')
+    for d in TREE_SIZE_DOMAIN.keys():
+        arcpy.management.AddCodedValueToDomain(workspace, TREE_SIZE_DOMAIN_NAME, TREE_SIZE_DOMAIN[d], d)
     # Community name
-    arcpy.management.CreateDomain(workspace, COMMUNITY_DOMAIN_NAME, None, 'LONG', 'CODED')
+    arcpy.management.CreateDomain(workspace, COMMUNITY_DOMAIN_NAME, None, 'SHORT', 'CODED')
     with arcpy.da.SearchCursor(MUNI_COMMUNITY_AREA, ['OBJECTID', 'Community']) as cursor:
             for attr_vals in cursor:
                 arcpy.management.AddCodedValueToDomain(workspace, COMMUNITY_DOMAIN_NAME, attr_vals[0], attr_vals[1])
