@@ -3,17 +3,16 @@ import os
 import multiprocessing
 import shutil
 
-import pp.constants as pp_c
+import pp.common as pp_c
 
 import pp.locate_trees
 import pp.spaces
 
 import pp.logger
-logger = pp.logger.get('pp_log')
 
 
 def run():
-    __log_info ("Logging to %s" % pp.logger.LOG_FILE)
+    pp_c.log_info ("Logging to %s" % pp.logger.LOG_FILE)
     
     arcpy.env.overwriteOutput = True
     
@@ -29,7 +28,7 @@ def run():
 
     pp.spaces.prepare_stats_fc ()
               
-    community_specs = pp.spaces.get_communities(pp_c.SUBSET_START_POINT, pp_c.SUBSET_COUNT)
+    community_specs = __get_communities(pp_c.SUBSET_START_POINT, pp_c.SUBSET_COUNT)
     
     if pp_c.IS_CREATE_SPACES:
         if pp_c.PROCESSORS > 1:
@@ -48,7 +47,7 @@ def run():
         for community_spec in community_specs:
             community_spaces_fc = pp.spaces.get_community_spaces_fc_name (community_spec[0])
             community_trees_fc = pp.spaces.get_community_trees_fc_name (community_spec[0])
-            __delete ([community_trees_fc])           
+            pp_c.delete ([community_trees_fc])           
             pp.locate_trees.run (community_spaces_fc, None, pp_c.TREE_TEMPLATE_FC, community_trees_fc)
             
                 
@@ -60,34 +59,27 @@ def run():
         pp.spaces.compute_tree_stats ()
         
     
-    __log_info('Complete: %s' % ([c[0] for c in community_specs]))
+    pp_c.log_info('Complete: %s' % ([c[0] for c in community_specs]))
     return
 
 
 
-
-def __log_info (text, community = None):
-    __log (text, False, community)
-           
-def __log_debug (text, community = None):
-    __log (text, True, community   )        
-
-def __log (text, is_debug, community = None):
-    if community is None:
-        t = "%i: %s" % (pp_c.OS_PID, text)
-    else:
-        t ="%i %s: %s" % (pp_c.OS_PID, community, text)
-    if is_debug:
-        logger.debug(t)
-    else:
-        logger.info(t)
-    return
     
+        
+def __get_communities (start_point, count):
+    communities = []
+    with arcpy.da.SearchCursor(pp_c.MUNI_COMMUNITY_AREA, ['OBJECTID', 'COMMUNITY', 'SHAPE@']) as cursor:
+        for attr_vals in cursor:
+            communities.append( (attr_vals[1], int(attr_vals[2].getArea('PLANAR', 'ACRES')), attr_vals[0]) )
 
-def __delete (obj_list):
-    for obj in obj_list:
-        arcpy.Delete_management(obj)
-    return
+    community_names = [c[0] for c in communities]
+    if len(community_names) != len(set(community_names)):
+        raise Exception ("Duplicate community names: %s" % str(community_names))
+        
+    communities_sorted = [c for c in sorted(communities, key=lambda x: x[0].lower()) if c[0].lower() >= start_point.lower()][0:count]        
+    return communities_sorted
+
+
 
 
     

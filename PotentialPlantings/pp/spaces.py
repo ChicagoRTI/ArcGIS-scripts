@@ -1,10 +1,7 @@
 import arcpy
 import os
-import multiprocessing
-import shutil
 
-import pp.constants as pp_c
-
+import pp.common as pp_c
 
 import pp.logger
 logger = pp.logger.get('pp_log')
@@ -13,11 +10,10 @@ logger = pp.logger.get('pp_log')
 IN_MEM_ID = 0
 
 
-
 def run_mp (community_spec):
     try:
 
-        __log_debug ("C: %s" % str(community_spec))
+        pp_c.log_debug ("C: %s" % str(community_spec))
        
         arcpy.env.outputZFlag = "Disabled"
         arcpy.env.outputMFlag = "Disabled"
@@ -25,7 +21,7 @@ def run_mp (community_spec):
         
         # Process each community past the alphabetical starting point
         community, acres, idx = community_spec
-        __log_info('%i acres' % (acres), community)
+        pp_c.log_info('%i acres' % (acres), community)
         
         pp_c.USE_IN_MEM = pp_c.USE_IN_MEM if community != 'CHICAGO TWSHP' else False
         
@@ -54,96 +50,82 @@ def run_mp (community_spec):
         community_gdb = os.path.dirname(community_fc)
         if not arcpy.Exists(community_gdb):
             arcpy.CreateFileGDB_management(os.path.dirname(community_gdb), os.path.basename(community_gdb))
-        __delete ([community_fc])
+        pp_c.delete ([community_fc])
                    
-        __log_debug ('Getting community boundary', community)
+        pp_c.log_debug ('Getting community boundary', community)
         community_boundary = arcpy.SelectLayerByAttribute_management(pp_c.MUNI_COMMUNITY_AREA, 'NEW_SELECTION', "COMMUNITY = '%s'" % (community))[0]
     
-        __log_debug ('Clipping %s' %(os.path.basename(pp_c.CANOPY_EXPAND_TIF)), community)
+        pp_c.log_debug ('Clipping %s' %(os.path.basename(pp_c.CANOPY_EXPAND_TIF)), community)
         arcpy.management.Clip(pp_c.CANOPY_EXPAND_TIF, '#', canopy_clipped, community_boundary, nodata_value='', clipping_geometry="ClippingGeometry", maintain_clipping_extent="MAINTAIN_EXTENT")
         percent_canopy = float(arcpy.management.GetRasterProperties(canopy_clipped, 'MEAN')[0])
     
-        __log_debug ('Clipping %s' %(os.path.basename(pp_c.PLANTABLE_REGION_TIF)), community)
+        pp_c.log_debug ('Clipping %s' %(os.path.basename(pp_c.PLANTABLE_REGION_TIF)), community)
         arcpy.management.Clip(pp_c.PLANTABLE_REGION_TIF, '#', plantable_region_clipped, community_boundary, clipping_geometry="ClippingGeometry", maintain_clipping_extent="MAINTAIN_EXTENT")
     
-        __log_debug ('Removing trees', community)
+        pp_c.log_debug ('Removing trees', community)
         arcpy.gp.RasterCalculator_sa('Con("%s" != 1,"%s")' % (canopy_clipped, plantable_region_clipped), minus_trees)
-        __delete( [canopy_clipped, plantable_region_clipped] )
+        pp_c.delete( [canopy_clipped, plantable_region_clipped] )
                    
-        __log_debug ('Clipping %s' %(os.path.basename(pp_c.BUILDINGS_EXPAND_TIF)), community)
+        pp_c.log_debug ('Clipping %s' %(os.path.basename(pp_c.BUILDINGS_EXPAND_TIF)), community)
         arcpy.management.Clip(pp_c.BUILDINGS_EXPAND_TIF, '#', buildings_clipped, community_boundary, clipping_geometry="ClippingGeometry", maintain_clipping_extent="MAINTAIN_EXTENT")
         percent_buildings = arcpy.management.GetRasterProperties(buildings_clipped, 'MEAN')[0]
     
-        __log_debug ('Removing buildings', community)
+        pp_c.log_debug ('Removing buildings', community)
         arcpy.gp.RasterCalculator_sa('Con("%s" != 1,"%s")' % (buildings_clipped, minus_trees), minus_trees_buildings)
-        __delete( [buildings_clipped, minus_trees, community_boundary] )
+        pp_c.delete( [buildings_clipped, minus_trees, community_boundary] )
         
-        __log_debug ('Reclassifying raster', community)
+        pp_c.log_debug ('Reclassifying raster', community)
         minus_trees_buildings_reclass = arcpy.sa.Reclassify(minus_trees_buildings, "Value", "0 NODATA;1 1", "DATA"); 
-        __delete( [minus_trees_buildings] )
+        pp_c.delete( [minus_trees_buildings] )
         
-        __log_debug ('Converting raster to polygon', community)        
+        pp_c.log_debug ('Converting raster to polygon', community)        
         arcpy.RasterToPolygon_conversion(minus_trees_buildings_reclass, plantable_poly, "SIMPLIFY", "", "SINGLE_OUTER_PART", "")
-        __delete( [minus_trees_buildings_reclass] )
+        pp_c.delete( [minus_trees_buildings_reclass] )
 
-        __log_debug ('Repair invalid features', community)        
+        pp_c.log_debug ('Repair invalid features', community)        
         arcpy.management.RepairGeometry(plantable_poly, "DELETE_NULL", "ESRI")
     
-        __log_debug ('Converting multipart polygons to singlepart', community)        
+        pp_c.log_debug ('Converting multipart polygons to singlepart', community)        
         arcpy.MultipartToSinglepart_management(plantable_poly, plantable_single_poly)            
-        __delete( [plantable_poly] )
+        pp_c.delete( [plantable_poly] )
     
-        __log_debug ('Spatial join', community)        
+        pp_c.log_debug ('Spatial join', community)        
         arcpy.SpatialJoin_analysis(plantable_single_poly, pp_c.MUNI_COMMUNITY_AREA, plantable_muni, "JOIN_ONE_TO_ONE", "KEEP_ALL", "", "INTERSECT", "", "")
-        __delete( [plantable_single_poly] )
+        pp_c.delete( [plantable_single_poly] )
     
-        __log_debug ('Identify land use', community)        
+        pp_c.log_debug ('Identify land use', community)        
         arcpy.Identity_analysis(plantable_muni, pp_c.LAND_USE_2015, plantable_muni_landuse, "ALL", "", "NO_RELATIONSHIPS")
-        __delete( [plantable_muni] )
+        pp_c.delete( [plantable_muni] )
     
-        __log_debug ('Identify public land', community)        
+        pp_c.log_debug ('Identify public land', community)        
         arcpy.Identity_analysis(plantable_muni_landuse, pp_c.PUBLIC_LAND, plantable_muni_landuse_public, "ALL", "", "NO_RELATIONSHIPS")
-        __delete( [plantable_muni_landuse] )
+        pp_c.delete( [plantable_muni_landuse] )
     
-        __log_debug ('Add and populate the "CommunityID" field', community)   
+        pp_c.log_debug ('Add and populate the "CommunityID" field', community)   
         arcpy.management.CalculateField(plantable_muni_landuse_public, pp_c.SPACES_COMMUNITY_COL, '%i' % (idx), "PYTHON3", "", "SHORT")
     
-        __log_debug ('Add and populate the "Public" field', community)   
+        pp_c.log_debug ('Add and populate the "Public" field', community)   
         arcpy.management.CalculateField(plantable_muni_landuse_public, pp_c.SPACES_PUBLIC_PRIVATE_COL, "is_public(!FID_%s!)" % (os.path.basename(pp_c.PUBLIC_LAND)), "PYTHON3", r"""def is_public (fid):
             if fid == -1:
                 return 0
             else:
                 return 1""", "SHORT")
     
-        __log_debug ('Trim excess fields', community)   
+        pp_c.log_debug ('Trim excess fields', community)   
         __trim_excess_fields (plantable_muni_landuse_public, ['objectid', 'shape', 'shape_area', 'shape_length', pp_c.SPACES_LANDUSE_COL, pp_c.SPACES_PUBLIC_PRIVATE_COL, pp_c.SPACES_COMMUNITY_COL])
     
         __save_community_spaces (plantable_muni_landuse_public, community_fc)
-        __delete( [plantable_muni_landuse_public] )
+        pp_c.delete( [plantable_muni_landuse_public] )
 
         __update_stats (idx, {'percent_canopy': percent_canopy, 'percent_buildings': percent_buildings})
             
     except Exception as ex:
-      __log_debug ('Exception: %s' % (str(ex)))
+      pp_c.log_debug ('Exception: %s' % (str(ex)))
       raise ex
         
     return community_fc
       
 
-    
-        
-def get_communities (start_point, count):
-    communities = []
-    with arcpy.da.SearchCursor(pp_c.MUNI_COMMUNITY_AREA, ['OBJECTID', 'COMMUNITY', 'SHAPE@']) as cursor:
-        for attr_vals in cursor:
-            communities.append( (attr_vals[1], int(attr_vals[2].getArea('PLANAR', 'ACRES')), attr_vals[0]) )
-
-    community_names = [c[0] for c in communities]
-    if len(community_names) != len(set(community_names)):
-        raise Exception ("Duplicate community names: %s" % str(community_names))
-        
-    communities_sorted = [c for c in sorted(communities, key=lambda x: x[0].lower()) if c[0].lower() >= start_point.lower()][0:count]        
-    return communities_sorted
 
 
 
@@ -155,7 +137,7 @@ def  __get_intermediate_name (intermediate_output_gdb, name, idx, USE_IN_MEM):
         fn = os.path.join('in_memory', 'm%i' % (idx) + '_' + name[0:3] + '_' + str(IN_MEM_ID))
     else:
         fn = os.path.join(intermediate_output_gdb, name + '_%i' % idx )
-    __delete ([fn])
+    pp_c.delete ([fn])
     return fn
 
 
@@ -170,29 +152,6 @@ def get_community_trees_fc_name (community):
     community_fc =  os.path.join(community_gdb, pp_c.COMMUNITY_TREES_FC)
     return community_fc
 
-
-def __log_info (text, community = None):
-    __log (text, False, community)
-           
-def __log_debug (text, community = None):
-    __log (text, True, community   )        
-
-def __log (text, is_debug, community = None):
-    if community is None:
-        t = "%i: %s" % (pp_c.OS_PID, text)
-    else:
-        t ="%i %s: %s" % (pp_c.OS_PID, community, text)
-    if is_debug:
-        logger.debug(t)
-    else:
-        logger.info(t)
-    return
-    
-
-def __delete (obj_list):
-    for obj in obj_list:
-        arcpy.Delete_management(obj)
-    return
 
 
 def __trim_excess_fields (fc, keep_fields):
@@ -210,13 +169,13 @@ def __save_community_spaces (in_fc, out_fc):
     else:        
         arcpy.Copy_management(in_fc, temp_out_fc)   
     arcpy.management.Project(temp_out_fc, out_fc, arcpy.Describe(pp_c.TREE_TEMPLATE_FC).spatialReference)
-    __delete ([temp_out_fc])
+    pp_c.delete ([temp_out_fc])
     return
 
 
 
 def combine_spaces_fcs (community_specs):
-    __log_debug ('Combining spaces feature classes')
+    pp_c.log_debug ('Combining spaces feature classes')
     communities  = [c[0] for c in community_specs]
     community_fcs = [get_community_spaces_fc_name (c) for c in communities]
     community_ids = [str(c[2]) for c in community_specs]
@@ -228,12 +187,12 @@ def combine_spaces_fcs (community_specs):
         __create_domains (pp_c.COMBINED_OUTPUT_DIR)
     
     if pp_c.IS_SCRATCH_OUTPUT_DATA:
-        __log_debug ('Deleting combined spaces feature class')
-        __delete ([out_fc])
+        pp_c.log_debug ('Deleting combined spaces feature class')
+        pp_c.delete ([out_fc])
         
         
     if not arcpy.Exists(out_fc):       
-        __log_debug ('Creating combined spaces feature class')
+        pp_c.log_debug ('Creating combined spaces feature class')
         sr = arcpy.Describe(community_fcs[0]).spatialReference
         arcpy.CreateFeatureclass_management(os.path.dirname(out_fc), os.path.basename(out_fc), 'POLYGON', community_fcs[0], "DISABLED", "DISABLED", sr)
         arcpy.management.AssignDomainToField(out_fc, pp_c.SPACES_LANDUSE_COL, pp_c.LANDUSE_DOMAIN_NAME)
@@ -243,13 +202,13 @@ def combine_spaces_fcs (community_specs):
         arcpy.management.AddIndex(out_fc, pp_c.SPACES_LANDUSE_COL, "IDX_LandUse", "NON_UNIQUE", "NON_ASCENDING")
         
     if not pp_c.IS_SCRATCH_OUTPUT_DATA:        
-        __log_debug ('Deleting existing features in combined spaces feature class')
+        pp_c.log_debug ('Deleting existing features in combined spaces feature class')
         where = "%s IN (%s)" % (pp_c.SPACES_COMMUNITY_COL, ','.join(community_ids))
         old_records = arcpy.SelectLayerByAttribute_management(out_fc, 'NEW_SELECTION', where)[0]
         arcpy.management.DeleteFeatures(old_records)
 
  
-    __log_info ('Write to combined spaces feature class')
+    pp_c.log_info ('Write to combined spaces feature class')
     arcpy.management.Append(community_fcs, out_fc)
    
     return
@@ -257,7 +216,7 @@ def combine_spaces_fcs (community_specs):
 
 
 def combine_trees_fcs (community_specs):
-    __log_debug ('Combining trees feature classes')
+    pp_c.log_debug ('Combining trees feature classes')
     communities  = [c[0] for c in community_specs]
     community_fcs = [get_community_trees_fc_name (c) for c in communities]
     community_ids = [str(c[2]) for c in community_specs]
@@ -269,11 +228,11 @@ def combine_trees_fcs (community_specs):
         __create_domains (pp_c.COMBINED_TREES_OUTPUT_GDB)
     
     if pp_c.IS_SCRATCH_OUTPUT_DATA:
-        __log_debug ('Deleting combined trees feature class')
-        __delete ([out_fc])
+        pp_c.log_debug ('Deleting combined trees feature class')
+        pp_c.delete ([out_fc])
         
     if not arcpy.Exists(out_fc):       
-        __log_debug ('Creating combined trees feature class')
+        pp_c.log_debug ('Creating combined trees feature class')
         sr = arcpy.Describe(community_fcs[0]).spatialReference
         arcpy.CreateFeatureclass_management(os.path.dirname(out_fc), os.path.basename(out_fc), 'POINT', community_fcs[0], "DISABLED", "DISABLED", sr)
         arcpy.management.AssignDomainToField(out_fc, pp_c.TREES_LANDUSE_COL, pp_c.LANDUSE_DOMAIN_NAME)
@@ -285,12 +244,12 @@ def combine_trees_fcs (community_specs):
         arcpy.management.AddIndex(out_fc, pp_c.TREES_PUBLIC_PRIVATE_COL, "IDX_PublicPrivate", "NON_UNIQUE", "NON_ASCENDING")
         
     if not pp_c.IS_SCRATCH_OUTPUT_DATA:
-        __log_debug ('Deleting existing features in combined trees feature class')
+        pp_c.log_debug ('Deleting existing features in combined trees feature class')
         where = "%s IN (%s)" % (pp_c.TREES_COMMUNITY_COL, ','.join(community_ids))
         old_records = arcpy.SelectLayerByAttribute_management(out_fc, 'NEW_SELECTION', where)[0]
         arcpy.management.DeleteFeatures(old_records)
         
-    __log_info ('Write to combined trees feature class')
+    pp_c.log_info ('Write to combined trees feature class')
     arcpy.management.Append(community_fcs, out_fc)
    
     return
@@ -336,7 +295,7 @@ def compute_tree_stats ():
         for community_id, trees in cursor:
             tree_count_by_community[community_id] = trees
 
-    __delete ([tree_count_by_community_view, tree_count_by_community_table]) 
+    pp_c.delete ([tree_count_by_community_view, tree_count_by_community_table]) 
     
     # Update the stats table with the tree count and trees/acre
     for community_id in  tree_count_by_community.keys():
@@ -371,7 +330,7 @@ def prepare_stats_fc ():
         arcpy.management.AssignDomainToField(pp_c.COMBINED_STATS_FC, pp_c.STATS_COMMUNITY_COL, pp_c.COMMUNITY_DOMAIN_NAME)    
 
             
-        __delete ([communities_fc])
+        pp_c.delete ([communities_fc])
     return
 
 
@@ -385,18 +344,6 @@ def __update_stats (community_id, stats):
 
     
 
-if __name__ == '__main__':
-    
-    run()
-#    run ('B', 2)
-#    run ('Albany Park', 1)
-#    run ('', 9999)
-    
-    # if len(sys.argv) == 1:
-    #     run('', 9999)
-    # elif len(sys.argv) == 2:
-    #     run(sys.argv[1], 9999)
-    # else:
-    #     run(sys.argv[1], int(sys.argv[2]))
+
 
 

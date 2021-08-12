@@ -1,4 +1,5 @@
 import os
+import arcpy
 import configparser
 
 import pp.logger
@@ -90,3 +91,28 @@ TREE_SIZE_DOMAIN = {'Small': 0, 'Medium': 1, 'Large': 2}
 IN_MEM_ID = 0
 
 OS_PID = os.getpid()
+
+
+
+def log_info (text, community = None):
+    __log (text, False, community)
+           
+def log_debug (text, community = None):
+    __log (text, True, community   )        
+
+def __log (text, is_debug, community = None):
+    if community is None:
+        t = "%i: %s" % (OS_PID, text)
+    else:
+        t ="%i %s: %s" % (OS_PID, community, text)
+    if is_debug:
+        logger.debug(t)
+    else:
+        logger.info(t)
+    return
+    
+
+def delete (obj_list):
+    for obj in obj_list:
+        arcpy.Delete_management(obj)
+    return
