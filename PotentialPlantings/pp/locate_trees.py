@@ -18,7 +18,7 @@ logger = pp.logger.get('pp_log')
 
 
 # Can not run in multiprocessing mode from the Spyder console
-IS_MP = True
+IS_MP = False
 MP_NUM_CHUNKS = 8
 WRITE_TO_DEBUG_MESH_FC = False
 
