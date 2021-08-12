@@ -16,10 +16,12 @@ config = configparser.ConfigParser()
 config.read(cfg_fn)
 
 IS_CREATE_SPACES = bool(int(config['actions']['create_space_feature_classes']))
-IS_COMBINE_SPACES = bool(int(config['actions']['combine_space_feature_classes']))
 IS_CREATE_TREES = bool(int(config['actions']['create_tree_feature_classes']))
+IS_UPDATE_TREE_STATS = bool(int(config['actions']['update_tree_stats']))
+IS_COMBINE_SPACES = bool(int(config['actions']['combine_space_feature_classes']))
 IS_COMBINE_TREES = bool(int(config['actions']['combine_tree_site_feature_classes']))
-IS_SCRATCH_COMBINED_FCS = bool(int(config['actions']['scratch_combined_feature_classes']))
+IS_SCRATCH_OUTPUT_DATA = bool(int(config['actions']['scratch_combined_output_data']))
+
 
 
 PROCESSORS = int(config['runtime']['processors'])
@@ -34,15 +36,34 @@ PUBLIC_LAND = config['input_data']['public_land']
 TREE_TEMPLATE_FC = config['input_data']['tree_template_fc']
 
 
-
 SUBSET_START_POINT = config['community_subset']['start_point']
 SUBSET_COUNT = int(config['community_subset']['number'])
 
 
 INTERMEDIATE_OUTPUT_DIR = os.path.join(WORK_DIR, r'output\intermediate_data')
+
 COMMUNITY_OUTPUT_DIR = os.path.join(WORK_DIR, r'output\communities')
-COMBINED_SPACES_OUTPUT_GDB = os.path.join(WORK_DIR, r'output\combined_spaces.gdb')
-COMBINED_TREES_OUTPUT_GDB = os.path.join(WORK_DIR, r'output\combined_trees.gdb')
+COMMUNITY_SPACES_FC = 'plantable'
+COMMUNITY_TREES_FC = 'trees'
+COMMUNITY_TREES_FC = 'stats'
+
+
+COMBINED_OUTPUT_DIR = os.path.join(WORK_DIR, r'output\combined')
+COMBINED_SPACES_OUTPUT_GDB = os.path.join(COMBINED_OUTPUT_DIR, 'spaces.gdb')
+COMBINED_SPACES_FC = os.path.join(COMBINED_SPACES_OUTPUT_GDB, 'plantable')
+COMBINED_TREES_OUTPUT_GDB = os.path.join(COMBINED_OUTPUT_DIR, 'trees.gdb')
+COMBINED_TREES_FC = os.path.join(COMBINED_TREES_OUTPUT_GDB, 'trees')
+COMBINED_STATS_FC = os.path.join(COMBINED_TREES_OUTPUT_GDB, 'stats')
+
+STATS_SPEC = [('community_id', 'SHORT'),
+              ('acres', 'FLOAT'),
+              ('trees', 'LONG'),
+              ('trees_per_acre', 'FLOAT'),
+              ('percent_canopy', 'FLOAT'),
+              ('percent_buildings', 'FLOAT')]
+
+
+STATS_COMMUNITY_COL = 'community_id'
 
 SPACES_LANDUSE_COL = 'LandUse'
 SPACES_PUBLIC_PRIVATE_COL = 'Public'
@@ -81,6 +102,8 @@ OS_PID = os.getpid()
 def run():
     __log_info ("Logging to %s" % pp.logger.LOG_FILE)
     
+    arcpy.env.overwriteOutput = True
+    
     if os.path.isdir(INTERMEDIATE_OUTPUT_DIR):
         shutil.rmtree(INTERMEDIATE_OUTPUT_DIR)
     
@@ -89,6 +112,9 @@ def run():
     os.makedirs(os.path.dirname(COMBINED_SPACES_OUTPUT_GDB), exist_ok=True)
     os.makedirs(os.path.dirname(COMBINED_TREES_OUTPUT_GDB), exist_ok=True)
     os.makedirs(COMMUNITY_OUTPUT_DIR, exist_ok=True)
+    os.makedirs(COMBINED_OUTPUT_DIR, exist_ok=True)
+
+    __prepare_stats_fc ()
               
     community_specs = __get_communities(SUBSET_START_POINT, SUBSET_COUNT)
     
@@ -114,7 +140,12 @@ def run():
             
                 
     if IS_COMBINE_TREES:              
-        __combine_trees_fcs (community_specs)            
+        __combine_trees_fcs (community_specs)      
+        
+        
+    if IS_UPDATE_TREE_STATS:
+        __compute_tree_stats ()
+        
     
     __log_info('Complete: %s' % ([c[0] for c in community_specs]))
     return
@@ -149,6 +180,7 @@ def run_mp (community_spec):
         buildings_clipped = __get_intermediate_name (intermediate_output_gdb, 'buildings_clipped', idx, use_in_mem)
         minus_trees = __get_intermediate_name (intermediate_output_gdb, 'minus_trees', idx, use_in_mem)
         minus_trees_buildings = __get_intermediate_name (intermediate_output_gdb, 'minus_trees_buildings', idx, use_in_mem)
+        minus_trees_buildings_reclass = __get_intermediate_name (intermediate_output_gdb, 'minus_trees_buildings_reclass', idx, use_in_mem)
         plantable_poly = __get_intermediate_name (intermediate_output_gdb, 'plantable_poly', idx, use_in_mem)
         plantable_single_poly = __get_intermediate_name (intermediate_output_gdb, 'plantable_single_poly', idx, use_in_mem)
         plantable_muni = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni', idx, use_in_mem)
@@ -165,25 +197,31 @@ def run_mp (community_spec):
         community_boundary = arcpy.SelectLayerByAttribute_management(MUNI_COMMUNITY_AREA, 'NEW_SELECTION', "COMMUNITY = '%s'" % (community))[0]
     
         __log_debug ('Clipping %s' %(os.path.basename(CANOPY_EXPAND_TIF)), community)
-        arcpy.management.Clip(CANOPY_EXPAND_TIF, '#', canopy_clipped, community_boundary, clipping_geometry="ClippingGeometry", maintain_clipping_extent="MAINTAIN_EXTENT")
+        arcpy.management.Clip(CANOPY_EXPAND_TIF, '#', canopy_clipped, community_boundary, nodata_value='', clipping_geometry="ClippingGeometry", maintain_clipping_extent="MAINTAIN_EXTENT")
+        percent_canopy = float(arcpy.management.GetRasterProperties(canopy_clipped, 'MEAN')[0])
     
         __log_debug ('Clipping %s' %(os.path.basename(PLANTABLE_REGION_TIF)), community)
         arcpy.management.Clip(PLANTABLE_REGION_TIF, '#', plantable_region_clipped, community_boundary, clipping_geometry="ClippingGeometry", maintain_clipping_extent="MAINTAIN_EXTENT")
     
         __log_debug ('Removing trees', community)
-        arcpy.gp.RasterCalculator_sa('Con(IsNull("%s"),"%s")' % (canopy_clipped, plantable_region_clipped), minus_trees)
+        arcpy.gp.RasterCalculator_sa('Con("%s" != 1,"%s")' % (canopy_clipped, plantable_region_clipped), minus_trees)
         __delete( [canopy_clipped, plantable_region_clipped] )
                    
         __log_debug ('Clipping %s' %(os.path.basename(BUILDINGS_EXPAND_TIF)), community)
         arcpy.management.Clip(BUILDINGS_EXPAND_TIF, '#', buildings_clipped, community_boundary, clipping_geometry="ClippingGeometry", maintain_clipping_extent="MAINTAIN_EXTENT")
+        percent_buildings = arcpy.management.GetRasterProperties(buildings_clipped, 'MEAN')[0]
     
         __log_debug ('Removing buildings', community)
-        arcpy.gp.RasterCalculator_sa('Con(IsNull("%s"),"%s")' % (buildings_clipped, minus_trees), minus_trees_buildings)
+        arcpy.gp.RasterCalculator_sa('Con("%s" != 1,"%s")' % (buildings_clipped, minus_trees), minus_trees_buildings)
         __delete( [buildings_clipped, minus_trees, community_boundary] )
         
-        __log_debug ('Converting raster to polygon', community)        
-        arcpy.RasterToPolygon_conversion(minus_trees_buildings, plantable_poly, "SIMPLIFY", "", "SINGLE_OUTER_PART", "")
+        __log_debug ('Reclassifying raster', community)
+        minus_trees_buildings_reclass = arcpy.sa.Reclassify(minus_trees_buildings, "Value", "0 NODATA;1 1", "DATA"); 
         __delete( [minus_trees_buildings] )
+        
+        __log_debug ('Converting raster to polygon', community)        
+        arcpy.RasterToPolygon_conversion(minus_trees_buildings_reclass, plantable_poly, "SIMPLIFY", "", "SINGLE_OUTER_PART", "")
+        __delete( [minus_trees_buildings_reclass] )
 
         __log_debug ('Repair invalid features', community)        
         arcpy.management.RepairGeometry(plantable_poly, "DELETE_NULL", "ESRI")
@@ -217,9 +255,10 @@ def run_mp (community_spec):
         __log_debug ('Trim excess fields', community)   
         __trim_excess_fields (plantable_muni_landuse_public, ['objectid', 'shape', 'shape_area', 'shape_length', SPACES_LANDUSE_COL, SPACES_PUBLIC_PRIVATE_COL, SPACES_COMMUNITY_COL])
     
-        __save_community (plantable_muni_landuse_public, community_fc)
+        __save_community_spaces (plantable_muni_landuse_public, community_fc)
         __delete( [plantable_muni_landuse_public] )
 
+        __update_stats (idx, {'percent_canopy': percent_canopy, 'percent_buildings': percent_buildings})
             
     except Exception as ex:
       __log_debug ('Exception: %s' % (str(ex)))
@@ -250,7 +289,7 @@ def  __get_intermediate_name (intermediate_output_gdb, name, idx, use_in_mem):
     
     if use_in_mem:
         IN_MEM_ID = IN_MEM_ID + 1
-        fn = os.path.join('in_memory', name[0:3] + '_%i' % idx + '_' +  str(IN_MEM_ID))
+        fn = os.path.join('in_memory', 'm%i' % (idx) + '_' + name[0:3] + '_' + str(IN_MEM_ID))
     else:
         fn = os.path.join(intermediate_output_gdb, name + '_%i' % idx )
     __delete ([fn])
@@ -259,12 +298,13 @@ def  __get_intermediate_name (intermediate_output_gdb, name, idx, use_in_mem):
 
 def __get_community_spaces_fc_name (community):
     community_gdb = os.path.join(COMMUNITY_OUTPUT_DIR, community.replace(' ','') + '.gdb')
-    community_fc =  os.path.join(community_gdb, 'plantable')
+    community_fc =  os.path.join(community_gdb, COMMUNITY_SPACES_FC)
     return community_fc
+
 
 def __get_community_trees_fc_name (community):
     community_gdb = os.path.join(COMMUNITY_OUTPUT_DIR, community.replace(' ','') + '.gdb')
-    community_fc =  os.path.join(community_gdb, 'trees')
+    community_fc =  os.path.join(community_gdb, COMMUNITY_TREES_FC)
     return community_fc
 
 
@@ -300,7 +340,7 @@ def __trim_excess_fields (fc, keep_fields):
 
 
 
-def __save_community (in_fc, out_fc):
+def __save_community_spaces (in_fc, out_fc):
     temp_out_fc = os.path.join(os.path.dirname(out_fc), os.path.basename(out_fc) + '_projected')
     if arcpy.da.Describe(in_fc)['catalogPath'].startswith('in_memory\\'):
         arcpy.CopyFeatures_management(in_fc, temp_out_fc)
@@ -318,13 +358,13 @@ def __combine_spaces_fcs (community_specs):
     community_fcs = [__get_community_spaces_fc_name (c) for c in communities]
     community_ids = [str(c[2]) for c in community_specs]
     
-    out_fc = os.path.join(COMBINED_SPACES_OUTPUT_GDB, 'plantable')   
+    out_fc = COMBINED_SPACES_FC   
         
     if not arcpy.Exists(COMBINED_SPACES_OUTPUT_GDB):
         arcpy.CreateFileGDB_management(os.path.dirname(COMBINED_SPACES_OUTPUT_GDB), os.path.basename(COMBINED_SPACES_OUTPUT_GDB))
         __create_domains (COMBINED_SPACES_OUTPUT_GDB)
     
-    if IS_SCRATCH_COMBINED_FCS:
+    if IS_SCRATCH_OUTPUT_DATA:
         __log_debug ('Deleting combined spaces feature class')
         __delete ([out_fc])
         
@@ -339,7 +379,7 @@ def __combine_spaces_fcs (community_specs):
         arcpy.management.AddIndex(out_fc, SPACES_COMMUNITY_COL, "IDX_Comm", "NON_UNIQUE", "NON_ASCENDING")
         arcpy.management.AddIndex(out_fc, SPACES_LANDUSE_COL, "IDX_LandUse", "NON_UNIQUE", "NON_ASCENDING")
         
-    if not IS_SCRATCH_COMBINED_FCS:        
+    if not IS_SCRATCH_OUTPUT_DATA:        
         __log_debug ('Deleting existing features in combined spaces feature class')
         where = "%s IN (%s)" % (SPACES_COMMUNITY_COL, ','.join(community_ids))
         old_records = arcpy.SelectLayerByAttribute_management(out_fc, 'NEW_SELECTION', where)[0]
@@ -359,13 +399,13 @@ def __combine_trees_fcs (community_specs):
     community_fcs = [__get_community_trees_fc_name (c) for c in communities]
     community_ids = [str(c[2]) for c in community_specs]
     
-    out_fc = os.path.join(COMBINED_TREES_OUTPUT_GDB, 'trees')   
+    out_fc = COMBINED_TREES_FC   
         
     if not arcpy.Exists(COMBINED_TREES_OUTPUT_GDB):
         arcpy.CreateFileGDB_management(os.path.dirname(COMBINED_TREES_OUTPUT_GDB), os.path.basename(COMBINED_TREES_OUTPUT_GDB))
         __create_domains (COMBINED_TREES_OUTPUT_GDB)
     
-    if IS_SCRATCH_COMBINED_FCS:
+    if IS_SCRATCH_OUTPUT_DATA:
         __log_debug ('Deleting combined trees feature class')
         __delete ([out_fc])
         
@@ -381,7 +421,7 @@ def __combine_trees_fcs (community_specs):
         arcpy.management.AddIndex(out_fc, TREES_LANDUSE_COL, "IDX_LandUse", "NON_UNIQUE", "NON_ASCENDING")
         arcpy.management.AddIndex(out_fc, TREES_PUBLIC_PRIVATE_COL, "IDX_PublicPrivate", "NON_UNIQUE", "NON_ASCENDING")
         
-    if not IS_SCRATCH_COMBINED_FCS:
+    if not IS_SCRATCH_OUTPUT_DATA:
         __log_debug ('Deleting existing features in combined trees feature class')
         where = "%s IN (%s)" % (TREES_COMMUNITY_COL, ','.join(community_ids))
         old_records = arcpy.SelectLayerByAttribute_management(out_fc, 'NEW_SELECTION', where)[0]
@@ -415,9 +455,75 @@ def __create_domains (workspace):
 
 
 
+def __compute_tree_stats ():
+    # Build a view with the trees per community and make a copy because the view is really slow       
+    query = "Select count(*) as trees, community_id from trees group by community_id"
+    tree_count_by_community_view = arcpy.management.CreateDatabaseView(os.path.dirname(COMBINED_TREES_FC), "tree_count_by_community_view", query)[0]  
+    tree_count_by_community_table = arcpy.conversion.TableToTable(tree_count_by_community_view, arcpy.env.scratchGDB, 'tree_count_by_community_table')[0]
+        
+    # Extract the acres for each community
+    acres_by_community = dict()
+    with arcpy.da.SearchCursor(COMBINED_STATS_FC, [STATS_COMMUNITY_COL, 'acres']) as cursor:
+        for community_id, acres in cursor:
+            acres_by_community[community_id] = acres
+    
+    # Extract the tree count for each community
+    tree_count_by_community = dict()
+    with arcpy.da.SearchCursor(tree_count_by_community_table, ['community_id', 'trees'], 'trees IS NOT NULL') as cursor:
+        for community_id, trees in cursor:
+            tree_count_by_community[community_id] = trees
+
+    __delete ([tree_count_by_community_view, tree_count_by_community_table]) 
+    
+    # Update the stats table with the tree count and trees/acre
+    for community_id in  tree_count_by_community.keys():
+        trees = tree_count_by_community[community_id]
+        acres = acres_by_community[community_id]
+        trees_per_acre = trees/acres
+        __update_stats (community_id, {'trees': trees, 'trees_per_acre': trees_per_acre})
+   
+                                                
+    return
+
+
+    
+def __prepare_stats_fc ():
+    stats_gdb = os.path.dirname(COMBINED_STATS_FC)
+    if not arcpy.Exists(stats_gdb) or IS_SCRATCH_OUTPUT_DATA:
+        arcpy.CreateFileGDB_management(os.path.dirname(stats_gdb), os.path.basename(stats_gdb))
+
+    if not arcpy.Exists(COMBINED_STATS_FC) or IS_SCRATCH_OUTPUT_DATA:
+        # Make a copy of the community feature class and reproject it
+        communities_fc = arcpy.conversion.FeatureClassToFeatureClass(MUNI_COMMUNITY_AREA, arcpy.env.scratchGDB, 'communities')[0]
+        arcpy.management.Project(communities_fc, COMBINED_STATS_FC, arcpy.Describe(COMBINED_TREES_FC).spatialReference)
+    
+        # Add the stats fields
+        for name, type_ in STATS_SPEC:
+            arcpy.AddField_management(COMBINED_STATS_FC, name, type_)
+         # Fill in the community_id field  
+        arcpy.management.CalculateField(COMBINED_STATS_FC, STATS_COMMUNITY_COL, '!OBJECTID!')
+        # Fill in the acres field  
+        arcpy.management.CalculateField(COMBINED_STATS_FC, 'acres', "!shape.area@acres!")
+        # Map community id to name
+        arcpy.management.AssignDomainToField(COMBINED_STATS_FC, STATS_COMMUNITY_COL, COMMUNITY_DOMAIN_NAME)    
+
+            
+        __delete ([communities_fc])
+    return
+
+
+def __update_stats (community_id, stats):
+    field_names = list(stats.keys())
+    with arcpy.da.UpdateCursor(COMBINED_STATS_FC, [STATS_COMMUNITY_COL] + field_names, '%s = %i' % (STATS_COMMUNITY_COL, community_id)) as cursor:
+        for attr_vals in cursor:
+            vals = [attr_vals[0]] + [stats[k] for k in field_names]
+            cursor.updateRow(vals)
+    return
+
     
 
 if __name__ == '__main__':
+    
     run()
 #    run ('B', 2)
 #    run ('Albany Park', 1)
