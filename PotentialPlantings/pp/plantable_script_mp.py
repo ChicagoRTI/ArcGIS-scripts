@@ -5,8 +5,9 @@ import shutil
 
 import pp.common as pp_c
 
-import pp.locate_trees
 import pp.spaces
+import pp.trees
+import pp.stats
 
 import pp.logger
 
@@ -16,57 +17,75 @@ def run():
     
     arcpy.env.overwriteOutput = True
     
-    if os.path.isdir(pp_c.INTERMEDIATE_OUTPUT_DIR):
-        shutil.rmtree(pp_c.INTERMEDIATE_OUTPUT_DIR)
+    if os.path.isdir(pp_c.TEMP_DIR):
+        shutil.rmtree(pp_c.TEMP_DIR)
     
-    os.makedirs(pp_c.WORK_DIR, exist_ok=True)
-    os.makedirs(pp_c.INTERMEDIATE_OUTPUT_DIR)
-    os.makedirs(os.path.dirname(pp_c.COMBINED_OUTPUT_DIR), exist_ok=True)
-    os.makedirs(os.path.dirname(pp_c.COMBINED_TREES_OUTPUT_GDB), exist_ok=True)
-    os.makedirs(pp_c.COMMUNITY_OUTPUT_DIR, exist_ok=True)
-    os.makedirs(pp_c.COMBINED_OUTPUT_DIR, exist_ok=True)
+    os.makedirs(pp_c.TEMP_DIR, exist_ok=True)
+    os.makedirs(pp_c.COMMUNITIES_DIR, exist_ok=True)
 
-    pp.spaces.prepare_stats_fc ()
-              
-    community_specs = __get_communities(pp_c.SUBSET_START_POINT, pp_c.SUBSET_COUNT)
+    # Prepare the output databases
+    for workspace in [pp_c.SPACES_GDB, pp_c.TREES_AND_STATS_GDB]:
+        if not arcpy.Exists(workspace):
+            raise Exception ("%s geodatabase does not exist" % (workspace))
+        if pp_c.IS_SCRATCH_OUTPUT_DATA: 
+            arcpy.env.workspace = workspace
+            pp_c.delete (arcpy.ListFeatureClasses())
+        pp_c.create_domains (workspace, pp_c.DOMAIN_ASSIGNMENTS[workspace])
     
-    if pp_c.IS_CREATE_SPACES:
-        if pp_c.PROCESSORS > 1:
-            p = multiprocessing.Pool(pp_c.PROCESSORS)
-            p.map(pp.spaces.run_mp, community_specs, 1)
-            p.close()        
-        else:
-            # Process each community past the alphabetical starting point
-            for community_spec in community_specs:
-                pp.spaces.run_mp (community_spec)
-                
+    # Prepare the output feature classes            
+    pp.spaces.prepare_fc ()
+    pp.trees.prepare_fc ()
+    pp.stats.prepare_fc ()
+    
+              
+    community_specs = __get_communities(pp_c.SUBSET_START_POINT, pp_c.SUBSET_COUNT, pp_c.SUBSET_LIST)
+    
+
+    if pp_c.PROCESSORS > 1:
+        p = multiprocessing.Pool(pp_c.PROCESSORS)
+        p.map(create_spaces_and_trees, community_specs, 1)
+        p.close()        
+    else:
+        # Process each community past the alphabetical starting point
+        for community_spec in community_specs:
+            create_spaces_and_trees (community_spec)
+                           
     if pp_c.IS_COMBINE_SPACES:              
         pp.spaces.combine_spaces_fcs (community_specs)
-        
-    if pp_c.IS_CREATE_TREES:
-        for community_spec in community_specs:
-            community_spaces_fc = pp.spaces.get_community_spaces_fc_name (community_spec[0])
-            community_trees_fc = pp.spaces.get_community_trees_fc_name (community_spec[0])
-            pp_c.delete ([community_trees_fc])           
-            pp.locate_trees.run (community_spaces_fc, None, pp_c.TREE_TEMPLATE_FC, community_trees_fc)
-            
                 
     if pp_c.IS_COMBINE_TREES:              
-        pp.spaces.combine_trees_fcs (community_specs)      
-        
-        
-    if pp_c.IS_UPDATE_TREE_STATS:
-        pp.spaces.compute_tree_stats ()
-        
-    
+        pp.trees.combine_trees_fcs (community_specs)      
+                    
     pp_c.log_info('Complete: %s' % ([c[0] for c in community_specs]))
     return
 
 
-
-    
+def create_spaces_and_trees (community_spec):
+    try:
+        pp_c.log_debug ("C: %s" % str(community_spec))
+       
+        arcpy.env.outputZFlag = "Disabled"
+        arcpy.env.outputMFlag = "Disabled"
+        arcpy.overwriteOutput = True
         
-def __get_communities (start_point, count):
+        __prepare_community_gdb (community_spec) 
+        
+        if pp_c.IS_CREATE_SPACES:
+            pp.spaces.run_mp (community_spec)
+                           
+        if pp_c.IS_CREATE_TREES:          
+            pp.trees.run (community_spec)       
+        return
+    
+    except Exception as ex:
+      pp_c.log_debug ('Exception: %s' % (str(ex)))
+      raise ex
+        
+      
+        
+def __get_communities (start_point, count, list_):
+    listed_communities = list(set([c.strip() for c in list_.split(',')]))
+    
     communities = []
     with arcpy.da.SearchCursor(pp_c.MUNI_COMMUNITY_AREA, ['OBJECTID', 'COMMUNITY', 'SHAPE@']) as cursor:
         for attr_vals in cursor:
@@ -77,10 +96,16 @@ def __get_communities (start_point, count):
         raise Exception ("Duplicate community names: %s" % str(community_names))
         
     communities_sorted = [c for c in sorted(communities, key=lambda x: x[0].lower()) if c[0].lower() >= start_point.lower()][0:count]        
-    return communities_sorted
+    listed_communities2 = [c for c in communities if c[0] in listed_communities]
+    return communities_sorted + sorted(listed_communities2, key=lambda x: x[0].lower())
 
 
-
+def __prepare_community_gdb (community_spec):
+    community, acres, community_id = community_spec
+    community_gdb = pp_c.get_community_gdb (community)
+    if not arcpy.Exists(community_gdb):
+            arcpy.CreateFileGDB_management(os.path.dirname(community_gdb), os.path.basename(community_gdb))
+    
 
     
 

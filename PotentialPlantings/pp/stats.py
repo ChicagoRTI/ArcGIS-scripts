@@ -1,71 +1,49 @@
-import time
+import arcpy
+import os
+
+import pp.common as pp_c
 
 import pp.logger
 logger = pp.logger.get('pp_log')
 
-LOG_DETAILS_FREQUENCY = 1000
 
-class StatsTimer:
+
+def prepare_fc ():
+    if not arcpy.Exists(pp_c.STATS_FC):       
+        pp_c.log_debug ("Creating '%s'" % pp_c.STATS_FC)
+        # Make a copy of the community feature class and reproject it
+        communities_fc = arcpy.conversion.FeatureClassToFeatureClass(pp_c.MUNI_COMMUNITY_AREA, arcpy.env.scratchGDB, 'communities')[0]
+        arcpy.management.Project(communities_fc, pp_c.STATS_FC, arcpy.Describe(pp_c.TREES_TEMPLATE_FC).spatialReference)
     
-    MESH_CREATE_END = 0
-    FIND_SITES_END = 1
-    WRITE_SITES_END = 2
-        
-    def __init__(self, desc=''):
-        self.times = [time.monotonic(), -1, -1]
-        self.quantities = [0, 0, 0]
-        self.desc = desc
+        # Add the stats fields
+        for name, type_ in pp_c.COMMUNITY_STATS_SPEC + pp_c.DERIVED_STATS + pp_c.SPACE_STATS_SPEC + pp_c.TREE_STATS_SPEC:
+            arcpy.AddField_management(pp_c.STATS_FC, name, type_)
+         # Fill in the community_id field  
+        arcpy.management.CalculateField(pp_c.STATS_FC, pp_c.STATS_COMMUNITY_COL, '!OBJECTID!')
+        # Fill in the acres field  
+        arcpy.management.CalculateField(pp_c.STATS_FC, 'acres', "!shape.area@acres!")
+        # Map community id to name
+        arcpy.management.AssignDomainToField(pp_c.STATS_FC, pp_c.STATS_COMMUNITY_COL, pp_c.COMMUNITY_DOMAIN_NAME)    
+            
+        pp_c.delete ([communities_fc])
+    return
     
-    def record (self, i):
-        now = time.monotonic()
-        self.times[i] = now - self.times[i]
-        if i+1 < len(self.times):
-            self.times[i+1] = time.monotonic()
 
 
-   
-class StatsAccumulator:
-           
-    def __init__(self, desc=''):
-        self.count = 0
-        self.times = [0,0,0]
-        self.t_ttl = 0
-        self.quantities = [0, 0, 0]
-        self.desc = desc
-                    
-    def accumulate (self, stats_timer, process_id, oid, mesh_sq_meters, polygon_sq_meters, plantings):
-        quantities = [mesh_sq_meters, polygon_sq_meters, plantings]
-        ttl_time = sum(stats_timer.times)
-        self.count = self.count + 1
-        
-        if LOG_DETAILS_FREQUENCY > 0 and self.count % LOG_DETAILS_FREQUENCY == 0:
-            acres_per_second = polygon_sq_meters/ttl_time if ttl_time != 0 else 0
-            logger.info  ("{:>2s} {:>12s} {:>12.3f} {:>12.3f} {:>9d} {:>10.3f} {:>9.3f} {:>9.3f} {:>10.3f} {:>7.1f} {:>8d}".format(str(process_id), str(oid), *quantities, *stats_timer.times, ttl_time, acres_per_second, self.count))        
-        for i in range (len(self.times)):
-            self.times[i] = self.times[i] + stats_timer.times[i]
-        for i in range (len(self.quantities)):
-            self.quantities[i] = self.quantities[i] + quantities[i]
-        self.t_ttl = self.t_ttl + ttl_time
-
-    def add (self, stats_accumulator):
-        for i in range (len(self.times)):
-            self.times[i] = self.times[i] + stats_accumulator.times[i]
-        for i in range (len(self.quantities)):
-            self.quantities[i] = self.quantities[i] + stats_accumulator.quantities[i]
-        self.t_ttl = self.t_ttl + stats_accumulator.t_ttl
-        
-        
-    def log_accumulation (self, process_id):
-        pid = '' if process_id is None else str(process_id)
-        acres_per_second = self.quantities[1]/self.t_ttl
-        logger.info  ("{:>2s} {:>12s} {:>12.3f} {:>12.3f} {:>9d} {:>10.3f} {:>9.3f} {:>9.3f} {:>10.3f} {:>7.1f} {:>8d}".format(pid, '', *self.quantities, *self.times, self.t_ttl, acres_per_second, self.count))        
+def update_stats (community_id, stats, stats_spec):
+    field_names = [f[0] for f in stats_spec]
+    with arcpy.da.UpdateCursor(pp_c.STATS_FC, field_names, '%s = %i' % (pp_c.STATS_COMMUNITY_COL, community_id)) as cursor:
+        for attr_vals in cursor:
+            cursor.updateRow(stats)
+    return
 
 
-
-    @staticmethod
-    def log_header (desc):
-        logger.info  ('')
-        logger.info  (desc)
-        logger.info  ('--------------------')
-        logger.info  ("{:>2s} {:>12s} {:>12s} {:>12s} {:>9s} {:>10s} {:>9s} {:>9s} {:>10s} {:>7s} {:>8s}".format('',      '', 'Mesh ',  'Site',       '',  'Mesh   ',  'Tree   ', 'Write  ', 'Total  ', 'Acres/', 'Total'))
-        logger.info  ("{:>2s} {:>12s} {:>12s} {:>12s} {:>9s} {:>10s} {:>9s} {:>9s} {:>10s} {:>7s} {:>8s}".format('Pr', 'OID', 'Acres',  'Acres', 'Trees',  'Seconds',  'Seconds', 'Seconds', 'Seconds', 'Second', 'Sites'))
+def update_derived_stats (community_id):
+    field_names = ['acres', 'small', 'medium', 'large', 'percent_canopy', 'percent_buildings', 'percent_other', 'trees', 'trees_per_acre']
+    with arcpy.da.UpdateCursor(pp_c.STATS_FC, field_names, '%s = %i' % (pp_c.STATS_COMMUNITY_COL, community_id)) as cursor:
+        for acres, small, medium, large, percent_canopy, percent_buildings, percent_other, trees, trees_per_acre in cursor:
+            trees = small + medium + large
+            trees_per_acre = trees/acres   
+            percent_other = 100.0 - percent_canopy - percent_buildings
+            cursor.updateRow([acres, small, medium, large, percent_canopy, percent_buildings, percent_other, trees, trees_per_acre])
+    return
