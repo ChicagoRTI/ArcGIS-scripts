@@ -36,11 +36,9 @@ def run():
     pp.spaces.prepare_fc ()
     pp.trees.prepare_fc ()
     pp.stats.prepare_fc ()
-    
-              
+                  
     community_specs = __get_communities(pp_c.SUBSET_START_POINT, pp_c.SUBSET_COUNT, pp_c.SUBSET_LIST)
     
-
     if pp_c.PROCESSORS > 1:
         p = multiprocessing.Pool(pp_c.PROCESSORS)
         p.map(create_spaces_and_trees, community_specs, 1)
@@ -48,7 +46,10 @@ def run():
     else:
         # Process each community past the alphabetical starting point
         for community_spec in community_specs:
-            create_spaces_and_trees (community_spec)
+            
+            if community_spec[0].lower() != 'joliet' and community_spec[0].lower() != 'chicago twshp':
+            
+                create_spaces_and_trees (community_spec)
                            
     if pp_c.IS_COMBINE_SPACES:              
         pp.spaces.combine_spaces_fcs (community_specs)
@@ -106,7 +107,6 @@ def __prepare_community_gdb (community_spec):
     if not arcpy.Exists(community_gdb):
             arcpy.CreateFileGDB_management(os.path.dirname(community_gdb), os.path.basename(community_gdb))
     
-
     
 
 if __name__ == '__main__':

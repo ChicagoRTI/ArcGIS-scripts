@@ -45,15 +45,8 @@ STATS_FC = os.path.join(TREES_AND_STATS_GDB, 'stats')
 COMMUNITIES_DIR = config['output_data']['communities_dir']
 COMMUNITY_SPACES_FC = 'spaces'
 COMMUNITY_TREES_FC = 'trees'
-
-
-#COMBINED_OUTPUT_DIR = os.path.join(WORK_DIR, r'output\merged')
-#COMBINED_OUTPUT_GDB = os.path.join(COMBINED_OUTPUT_DIR, 'pp.gdb')
-#COMBINED_SPACES_OUTPUT_GDB = os.path.join(COMBINED_OUTPUT_DIR, 'spaces.gdb')
-#COMBINED_SPACES_FC = os.path.join(COMBINED_OUTPUT_GDB, 'spaces')
-#COMBINED_TREES_OUTPUT_GDB = os.path.join(COMBINED_OUTPUT_DIR, 'trees.gdb')
-#COMBINED_TREES_FC = os.path.join(COMBINED_OUTPUT_GDB, 'trees')
-#COMBINED_STATS_FC = os.path.join(COMBINED_OUTPUT_GDB, 'stats')
+COMMUNITY_SPACE_STATS_TBL = 'space_stats'
+COMMUNITY_TREE_STATS_TBL = 'tree_stats'
 
 
 STAT_TREES = 'trees'
@@ -134,11 +127,6 @@ DOMAIN_ASSIGNMENTS = {SPACES_GDB:  [COMMUNITY_DOMAIN_NAME],
                                              COMMUNITY_DOMAIN_NAME, 
                                              TREE_SIZE_DOMAIN_NAME]}
 
-# DOMAIN_ASSIGNMENTS = {SPACES_GDB:           [(COMMUNITY_DOMAIN_NAME, SPACES_COMMUNITY_COL)], 
-#                       TREES_AND_STATS_GDB:  [(LANDUSE_DOMAIN_NAME, TREES_LANDUSE_COL), 
-#                                              (PUBLIC_PRIVATE_DOMAIN_NAME, TREES_PUBLIC_PRIVATE_COL),
-#                                              (COMMUNITY_DOMAIN_NAME, TREES_COMMUNITY_COL),
-#                                              (TREE_SIZE_DOMAIN_NAME, TREES_SIZE_COL)]}
 
 IN_MEM_ID = 0
 
@@ -150,18 +138,10 @@ def get_community_gdb (community):
     return community_gdb
 
 
-def get_community_spaces_fc_name (community):
+def get_community_fc_name (community, fc_type):
     community_gdb = get_community_gdb (community)
-    community_fc =  os.path.join(community_gdb, COMMUNITY_SPACES_FC)
+    community_fc =  os.path.join(community_gdb, fc_type)
     return community_fc
-
-
-def get_community_trees_fc_name (community):
-    community_gdb = get_community_gdb (community)
-    community_fc =  os.path.join(community_gdb, COMMUNITY_TREES_FC)
-    return community_fc
-
-
 
 
 def create_domains (workspace, domain_names):
@@ -189,6 +169,9 @@ def create_domains (workspace, domain_names):
                     arcpy.management.AddCodedValueToDomain(workspace, COMMUNITY_DOMAIN_NAME, attr_vals[0], attr_vals[1])
     return 
 
+
+def is_in_memory (fc):
+    return os.path.dirname(fc).split(os.sep)[-1] == 'in_memory'
 
 
 def log_info (text, community = None):

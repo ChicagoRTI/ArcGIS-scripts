@@ -37,12 +37,14 @@ def run_mp (community_spec):
         minus_trees_buildings_reclass = __get_intermediate_name (intermediate_output_gdb, 'minus_trees_buildings_reclass', idx, pp_c.USE_IN_MEM)
         plantable_poly = __get_intermediate_name (intermediate_output_gdb, 'plantable_poly', idx, pp_c.USE_IN_MEM)
         plantable_single_poly = __get_intermediate_name (intermediate_output_gdb, 'plantable_single_poly', idx, pp_c.USE_IN_MEM)
+#        plantable_single_poly_filtered = __get_intermediate_name (intermediate_output_gdb, 'plantable_single_poly_filtered', idx, pp_c.USE_IN_MEM)
         plantable_muni = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni', idx, pp_c.USE_IN_MEM)
         plantable_muni_landuse = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni_landuse', idx, pp_c.USE_IN_MEM)
         plantable_muni_landuse_public = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni_landuse_public', idx, pp_c.USE_IN_MEM)
         
-        community_fc = pp_c.get_community_spaces_fc_name (community)
+        community_fc = pp_c.get_community_fc_name (community, pp_c.COMMUNITY_SPACES_FC)
         pp_c.delete ([community_fc])
+        community_stats_tbl = pp.stats.prepare_community_stats_tbl (community, idx, pp_c.COMMUNITY_SPACE_STATS_TBL, pp_c.SPACE_STATS_SPEC)
                    
         pp_c.log_debug ('Getting community boundary', community)
         community_boundary = arcpy.SelectLayerByAttribute_management(pp_c.MUNI_COMMUNITY_AREA, 'NEW_SELECTION', "COMMUNITY = '%s'" % (community))[0]
@@ -80,7 +82,7 @@ def run_mp (community_spec):
         pp_c.log_debug ('Converting multipart polygons to singlepart', community)        
         arcpy.MultipartToSinglepart_management(plantable_poly, plantable_single_poly)            
         pp_c.delete( [plantable_poly] )
-    
+                
         pp_c.log_debug ('Spatial join', community)        
         arcpy.SpatialJoin_analysis(plantable_single_poly, pp_c.MUNI_COMMUNITY_AREA, plantable_muni, "JOIN_ONE_TO_ONE", "KEEP_ALL", "", "INTERSECT", "", "")
         pp_c.delete( [plantable_single_poly] )
@@ -110,7 +112,7 @@ def run_mp (community_spec):
         pp_c.delete( [plantable_muni_landuse_public] )
 
 #        update_stats (idx, {'percent_canopy': percent_canopy, 'percent_buildings': percent_buildings})
-        pp.stats.update_stats (idx, [percent_canopy*100, percent_buildings*100], pp_c.SPACE_STATS_SPEC)
+        pp.stats.update_stats (community_stats_tbl, idx, [percent_canopy*100, percent_buildings*100], pp_c.SPACE_STATS_SPEC)
             
     except Exception as ex:
       pp_c.log_debug ('Exception: %s' % (str(ex)))
@@ -168,7 +170,7 @@ def prepare_fc ():
 def combine_spaces_fcs (community_specs):
     pp_c.log_debug ('Combining spaces feature classes')
     communities  = [c[0] for c in community_specs]
-    community_fcs = [pp_c.get_community_spaces_fc_name (c) for c in communities]
+    community_fcs = [pp_c.get_community_fc_name (c, pp_c.COMMUNITY_SPACES_FC) for c in communities]
     community_ids = [str(c[2]) for c in community_specs]
     
     out_fc = pp_c.COMBINED_SPACES_FC   

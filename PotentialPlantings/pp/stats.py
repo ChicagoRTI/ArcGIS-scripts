@@ -27,12 +27,24 @@ def prepare_fc ():
             
         pp_c.delete ([communities_fc])
     return
+
+
+def prepare_community_stats_tbl (community, community_id, fc_type, stats_spec):
+    stats_tbl = pp_c.get_community_fc_name (community, fc_type)
+    if arcpy.Exists(stats_tbl):
+        arcpy.Delete_management(stats_tbl)
+    arcpy.CreateTable_management(os.path.dirname(stats_tbl), os.path.basename(stats_tbl))
+    arcpy.AddField_management(stats_tbl, pp_c.STATS_COMMUNITY_COL, 'SHORT')
+    for name, type_ in stats_spec:
+        arcpy.AddField_management(stats_tbl, name, type_)
+    with arcpy.da.InsertCursor(stats_tbl, [pp_c.STATS_COMMUNITY_COL] + [s[0] for s in stats_spec]) as cursor:
+        cursor.insertRow([community_id] + [0]*len(stats_spec))
+    return stats_tbl
     
 
-
-def update_stats (community_id, stats, stats_spec):
+def update_stats (tbl, community_id, stats, stats_spec):
     field_names = [f[0] for f in stats_spec]
-    with arcpy.da.UpdateCursor(pp_c.STATS_FC, field_names, '%s = %i' % (pp_c.STATS_COMMUNITY_COL, community_id)) as cursor:
+    with arcpy.da.UpdateCursor(tbl, field_names, '%s = %i' % (pp_c.STATS_COMMUNITY_COL, community_id)) as cursor:
         for attr_vals in cursor:
             cursor.updateRow(stats)
     return

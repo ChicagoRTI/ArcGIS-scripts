@@ -55,8 +55,8 @@ def run(community_spec):
     landuse_stats = [0,0,0,0,0,0,0,0,0,0,0]
     public_private_stats = [0,0]
     
-    input_fc = pp_c.get_community_spaces_fc_name (community_spec[0])
-    output_fc = pp_c.get_community_trees_fc_name (community_spec[0])
+    input_fc = pp_c.get_community_fc_name (community_spec[0], pp_c.COMMUNITY_SPACES_FC)
+    output_fc = pp_c.get_community_fc_name (community_spec[0], pp_c.COMMUNITY_TREES_FC)
            
     
     if arcpy.Exists(output_fc):
@@ -68,14 +68,15 @@ def run(community_spec):
                                         "DISABLED", 
                                         "DISABLED", 
                                         pp_c.TREES_TEMPLATE_FC)
-    
 
+    community_stats_tbl = pp.stats.prepare_community_stats_tbl (community_name, community_id, pp_c.COMMUNITY_TREE_STATS_TBL, pp_c.TREE_STATS_SPEC)
 
     if WRITE_TO_DEBUG_MESH_FC and not IS_MP:
         arcpy.management.DeleteFeatures(MESH_FC)
         
     logger.debug  ("Calculating points")
-    with arcpy.da.SearchCursor(input_fc, ['OBJECTID', 'SHAPE@', 'community_id', 'land_use', 'is_public']) as cursor:
+    query = "Shape_Area > 2.5"
+    with arcpy.da.SearchCursor(input_fc, ['OBJECTID', 'SHAPE@', 'community_id', 'land_use', 'is_public'], query) as cursor:
         for oid, polygon, community, land_use, is_public in cursor:
             x_min, y_min, x_max, y_max = polygon.extent.XMin, polygon.extent.YMin, polygon.extent.XMax, polygon.extent.YMax 
 
@@ -118,8 +119,8 @@ def run(community_spec):
                             p = __mesh_to_point (r, c, nw_corner)
                             cursor.insertRow([p, mesh[r][c], r, c, p.X, p.Y, mesh_row_dim])
 
-    pp.stats.update_stats (community_id, size_stats + landuse_stats[1:] + public_private_stats, pp_c.TREE_STATS_SPEC)
-    pp.stats.update_derived_stats(community_id)
+    pp.stats.update_stats (community_stats_tbl, community_id, size_stats + landuse_stats[1:] + public_private_stats, pp_c.TREE_STATS_SPEC)
+#    pp.stats.update_derived_stats(community_id)
                        
     return 
 
@@ -288,10 +289,10 @@ def prepare_fc ():
 def combine_trees_fcs (community_specs):
     pp_c.log_debug ('Combining trees feature classes')
     
-    community_specs = [c for c in community_specs if arcpy.Exists(pp_c.get_community_trees_fc_name(c[0]))]
+    community_specs = [c for c in community_specs if arcpy.Exists(pp_c.get_community_fc_name(c[0], pp_c.COMMUNITY_TREES_FC))]
     
     communities  = [c[0] for c in community_specs]
-    community_fcs = [pp_c.get_community_trees_fc_name (c) for c in communities]
+    community_fcs = [pp_c.get_community_fc_name (c, pp_c.COMMUNITY_TREES_FC) for c in communities]
     community_ids = [str(c[2]) for c in community_specs]
     
     out_fc = pp_c.TREES_FC   
