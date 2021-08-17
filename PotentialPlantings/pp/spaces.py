@@ -10,17 +10,18 @@ logger = pp.logger.get('pp_log')
 
 IN_MEM_ID = 0
 
+PROBLEM_COMMUNITIES = ['Joliet', 'CHICAGO TWSHP']
 
-def run_mp (community_spec):
+def find_spaces (community_spec):
     try:
         
         # Process each community past the alphabetical starting point
         community, acres, idx = community_spec
         pp_c.log_info('Finding spaces. %i acres' % (acres), community)
         
-        pp_c.USE_IN_MEM = pp_c.USE_IN_MEM if community != 'CHICAGO TWSHP' else False
+        use_in_mem = pp_c.USE_IN_MEM if community not in PROBLEM_COMMUNITIES else False
         
-        if pp_c.USE_IN_MEM:
+        if use_in_mem:
             arcpy.Delete_management('in_memory')
             intermediate_output_gdb = None
         else:
@@ -29,18 +30,17 @@ def run_mp (community_spec):
                 arcpy.CreateFileGDB_management(os.path.dirname(intermediate_output_gdb), os.path.basename(intermediate_output_gdb))
 
     
-        canopy_clipped = __get_intermediate_name (intermediate_output_gdb, 'canopy_clipped', idx, pp_c.USE_IN_MEM)
-        plantable_region_clipped = __get_intermediate_name (intermediate_output_gdb, 'plantable_region_clipped', idx, pp_c.USE_IN_MEM)
-        buildings_clipped = __get_intermediate_name (intermediate_output_gdb, 'buildings_clipped', idx, pp_c.USE_IN_MEM)
-        minus_trees = __get_intermediate_name (intermediate_output_gdb, 'minus_trees', idx, pp_c.USE_IN_MEM)
-        minus_trees_buildings = __get_intermediate_name (intermediate_output_gdb, 'minus_trees_buildings', idx, pp_c.USE_IN_MEM)
-        minus_trees_buildings_reclass = __get_intermediate_name (intermediate_output_gdb, 'minus_trees_buildings_reclass', idx, pp_c.USE_IN_MEM)
-        plantable_poly = __get_intermediate_name (intermediate_output_gdb, 'plantable_poly', idx, pp_c.USE_IN_MEM)
-        plantable_single_poly = __get_intermediate_name (intermediate_output_gdb, 'plantable_single_poly', idx, pp_c.USE_IN_MEM)
-#        plantable_single_poly_filtered = __get_intermediate_name (intermediate_output_gdb, 'plantable_single_poly_filtered', idx, pp_c.USE_IN_MEM)
-        plantable_muni = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni', idx, pp_c.USE_IN_MEM)
-        plantable_muni_landuse = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni_landuse', idx, pp_c.USE_IN_MEM)
-        plantable_muni_landuse_public = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni_landuse_public', idx, pp_c.USE_IN_MEM)
+        canopy_clipped = __get_intermediate_name (intermediate_output_gdb, 'canopy_clipped', idx, use_in_mem)
+        plantable_region_clipped = __get_intermediate_name (intermediate_output_gdb, 'plantable_region_clipped', idx, use_in_mem)
+        buildings_clipped = __get_intermediate_name (intermediate_output_gdb, 'buildings_clipped', idx, use_in_mem)
+        minus_trees = __get_intermediate_name (intermediate_output_gdb, 'minus_trees', idx, use_in_mem)
+        minus_trees_buildings = __get_intermediate_name (intermediate_output_gdb, 'minus_trees_buildings', idx, use_in_mem)
+        minus_trees_buildings_reclass = __get_intermediate_name (intermediate_output_gdb, 'minus_trees_buildings_reclass', idx, use_in_mem)
+        plantable_poly = __get_intermediate_name (intermediate_output_gdb, 'plantable_poly', idx, use_in_mem)
+        plantable_single_poly = __get_intermediate_name (intermediate_output_gdb, 'plantable_single_poly', idx, use_in_mem)
+        plantable_muni = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni', idx, use_in_mem)
+        plantable_muni_landuse = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni_landuse', idx, use_in_mem)
+        plantable_muni_landuse_public = __get_intermediate_name (intermediate_output_gdb, 'plantable_muni_landuse_public', idx, use_in_mem)
         
         community_fc = pp_c.get_community_fc_name (community, pp_c.COMMUNITY_SPACES_FC)
         pp_c.delete ([community_fc])
@@ -104,14 +104,10 @@ def run_mp (community_spec):
                 return 0
             else:
                 return 1""", "SHORT")
-    
-        # pp_c.log_debug ('Trim excess fields', community)   
-        # __trim_excess_fields (plantable_muni_landuse_public, ['objectid', 'shape', 'shape_area', 'shape_length', pp_c.SPACES_LANDUSE_COL, pp_c.SPACES_PUBLIC_PRIVATE_COL, pp_c.SPACES_COMMUNITY_COL])
-    
+        
         __save_community_spaces (plantable_muni_landuse_public, community_fc)
         pp_c.delete( [plantable_muni_landuse_public] )
 
-#        update_stats (idx, {'percent_canopy': percent_canopy, 'percent_buildings': percent_buildings})
         pp.stats.update_stats (community_stats_tbl, idx, [percent_canopy*100, percent_buildings*100], pp_c.SPACE_STATS_SPEC)
             
     except Exception as ex:
@@ -121,20 +117,16 @@ def run_mp (community_spec):
     return community_fc
       
 
-
-
-
-def  __get_intermediate_name (intermediate_output_gdb, name, idx, USE_IN_MEM):
+def  __get_intermediate_name (intermediate_output_gdb, name, idx, use_in_mem):
     global IN_MEM_ID
     
-    if pp_c.USE_IN_MEM:
+    if use_in_mem:
         IN_MEM_ID = IN_MEM_ID + 1
         fn = os.path.join('in_memory', 'm%i' % (idx) + '_' + name[0:3] + '_' + str(IN_MEM_ID))
     else:
         fn = os.path.join(intermediate_output_gdb, name + '_%i' % idx )
     pp_c.delete ([fn])
     return fn
-
 
 
 def __trim_excess_fields (fc, keep_fields):
@@ -144,13 +136,11 @@ def __trim_excess_fields (fc, keep_fields):
     return
 
 
-
 def __save_community_spaces (in_fc, out_fc):
     sr = arcpy.Describe(pp_c.SPACES_TEMPLATE_FC).spatialReference
     arcpy.CreateFeatureclass_management(os.path.dirname(out_fc), os.path.basename(out_fc), 'POLYGON', pp_c.SPACES_TEMPLATE_FC, "DISABLED", "DISABLED", sr)        
     arcpy.management.AlterField(in_fc, 'LandUse', 'land_use')
     arcpy.management.Append(in_fc, out_fc, "NO_TEST")
-
     return
 
 
@@ -161,11 +151,8 @@ def prepare_fc ():
         arcpy.CreateFeatureclass_management(os.path.dirname(pp_c.SPACES_FC), os.path.basename(pp_c.SPACES_FC), 'POLYGON', pp_c.SPACES_TEMPLATE_FC, "DISABLED", "DISABLED", sr)        
         arcpy.management.AddIndex(pp_c.SPACES_FC, pp_c.SPACES_COMMUNITY_COL, "IDX_Comm", "NON_UNIQUE", "NON_ASCENDING")
         arcpy.management.AddIndex(pp_c.SPACES_FC, pp_c.SPACES_LANDUSE_COL, "IDX_LandUse", "NON_UNIQUE", "NON_ASCENDING")
-    
-    
+    return   
 
-    
-    
 
 def combine_spaces_fcs (community_specs):
     pp_c.log_debug ('Combining spaces feature classes')
@@ -178,8 +165,7 @@ def combine_spaces_fcs (community_specs):
     if pp_c.IS_SCRATCH_OUTPUT_DATA:
         pp_c.log_debug ('Deleting combined spaces feature class')
         pp_c.delete ([out_fc])
-        
-        
+                
     if not arcpy.Exists(out_fc):       
         pp_c.log_debug ('Creating combined spaces feature class')
         sr = arcpy.Describe(community_fcs[0]).spatialReference

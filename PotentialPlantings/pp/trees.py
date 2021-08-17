@@ -14,11 +14,7 @@ import pp.logger
 logger = pp.logger.get('pp_log')
 
 
-# Can not run in multiprocessing mode from the Spyder console
-IS_MP = False
-
 WRITE_TO_DEBUG_MESH_FC = False
-
 
 
 DB_DIR = r'C:\Users\dmorrison\AppData\Roaming\ESRI\Desktop10.6\ArcCatalog\ROW Habitat (SDE).SDE'
@@ -46,7 +42,7 @@ TREE_FOOTPRINT_DIM = {SMALL:  1,
                       BIG:    5}
 
 
-def run(community_spec):
+def site_trees (community_spec):
 
     community_name, acres, community_id = community_spec
     pp_c.log_info('Siting trees.', community_name)
@@ -71,7 +67,7 @@ def run(community_spec):
 
     community_stats_tbl = pp.stats.prepare_community_stats_tbl (community_name, community_id, pp_c.COMMUNITY_TREE_STATS_TBL, pp_c.TREE_STATS_SPEC)
 
-    if WRITE_TO_DEBUG_MESH_FC and not IS_MP:
+    if WRITE_TO_DEBUG_MESH_FC:
         arcpy.management.DeleteFeatures(MESH_FC)
         
     logger.debug  ("Calculating points")
@@ -112,7 +108,7 @@ def run(community_spec):
                     landuse_stats[land_use] = landuse_stats[land_use] + 1
                     public_private_stats[is_public] = public_private_stats[is_public] + 1
 
-            if WRITE_TO_DEBUG_MESH_FC and not IS_MP:
+            if WRITE_TO_DEBUG_MESH_FC:
                 with arcpy.da.InsertCursor(MESH_FC, ['SHAPE@', 'code', 'row', 'col', 'x', 'y', 'dim']) as cursor:
                     for r in range (0, mesh_row_dim):
                         for c in range (0, mesh_col_dim):
@@ -283,8 +279,7 @@ def prepare_fc ():
         arcpy.management.AddIndex(pp_c.TREES_FC, pp_c.TREES_LANDUSE_COL, "IDX_LandUse", "NON_UNIQUE", "NON_ASCENDING")
         arcpy.management.AddIndex(pp_c.TREES_FC, pp_c.TREES_PUBLIC_PRIVATE_COL, "IDX_PublicPrivate", "NON_UNIQUE", "NON_ASCENDING")
         
-    
-    
+        
 
 def combine_trees_fcs (community_specs):
     pp_c.log_debug ('Combining trees feature classes')

@@ -45,26 +45,23 @@ def run():
         p.close()        
     else:
         # Process each community past the alphabetical starting point
-        for community_spec in community_specs:
-            
-            if community_spec[0].lower() != 'joliet' and community_spec[0].lower() != 'chicago twshp':
-            
-                create_spaces_and_trees (community_spec)
+        for community_spec in community_specs:                       
+            create_spaces_and_trees (community_spec)
                            
     if pp_c.IS_COMBINE_SPACES:              
         pp.spaces.combine_spaces_fcs (community_specs)
                 
     if pp_c.IS_COMBINE_TREES:              
-        pp.trees.combine_trees_fcs (community_specs)      
+        pp.trees.combine_trees_fcs (community_specs)   
+        
+    pp.stats.combine_stats (community_specs)        
                     
     pp_c.log_info('Complete: %s' % ([c[0] for c in community_specs]))
     return
 
 
 def create_spaces_and_trees (community_spec):
-    try:
-        pp_c.log_debug ("C: %s" % str(community_spec))
-       
+    try:       
         arcpy.env.outputZFlag = "Disabled"
         arcpy.env.outputMFlag = "Disabled"
         arcpy.overwriteOutput = True
@@ -72,18 +69,20 @@ def create_spaces_and_trees (community_spec):
         __prepare_community_gdb (community_spec) 
         
         if pp_c.IS_CREATE_SPACES:
-            pp.spaces.run_mp (community_spec)
+            pp.spaces.find_spaces (community_spec)
                            
         if pp_c.IS_CREATE_TREES:          
-            pp.trees.run (community_spec)       
+            pp.trees.site_trees (community_spec)       
+
+
+        pp_c.log_info('Complete: %s' % (community_spec[0]))
         return
     
     except Exception as ex:
       pp_c.log_debug ('Exception: %s' % (str(ex)))
       raise ex
         
-      
-        
+              
 def __get_communities (start_point, count, list_):
     listed_communities = list(set([c.strip() for c in list_.split(',')]))
     

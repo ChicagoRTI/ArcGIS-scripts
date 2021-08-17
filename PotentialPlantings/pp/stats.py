@@ -40,6 +40,16 @@ def prepare_community_stats_tbl (community, community_id, fc_type, stats_spec):
     with arcpy.da.InsertCursor(stats_tbl, [pp_c.STATS_COMMUNITY_COL] + [s[0] for s in stats_spec]) as cursor:
         cursor.insertRow([community_id] + [0]*len(stats_spec))
     return stats_tbl
+
+        
+    
+def __read_community_stats (community, community_id, fc_type, stats_spec):
+    community_stats_tbl = pp_c.get_community_fc_name (community, fc_type)
+    if arcpy.Exists (community_stats_tbl):
+        with arcpy.da.SearchCursor(community_stats_tbl, [s[0] for s in stats_spec]) as cursor:
+            for attrs in cursor:
+                return attrs
+    return [0] * len(stats_spec)
     
 
 def update_stats (tbl, community_id, stats, stats_spec):
@@ -50,12 +60,25 @@ def update_stats (tbl, community_id, stats, stats_spec):
     return
 
 
-def update_derived_stats (community_id):
-    field_names = ['acres', 'small', 'medium', 'large', 'percent_canopy', 'percent_buildings', 'percent_other', 'trees', 'trees_per_acre']
-    with arcpy.da.UpdateCursor(pp_c.STATS_FC, field_names, '%s = %i' % (pp_c.STATS_COMMUNITY_COL, community_id)) as cursor:
-        for acres, small, medium, large, percent_canopy, percent_buildings, percent_other, trees, trees_per_acre in cursor:
-            trees = small + medium + large
-            trees_per_acre = trees/acres   
-            percent_other = 100.0 - percent_canopy - percent_buildings
-            cursor.updateRow([acres, small, medium, large, percent_canopy, percent_buildings, percent_other, trees, trees_per_acre])
-    return
+def combine_stats (community_specs):
+    for community, acres, community_id in community_specs:
+        pp_c.log_debug ('Updating final stats for %s' % community)
+        # Update space stats
+        space_stats = __read_community_stats (community, community_id, pp_c.COMMUNITY_SPACE_STATS_TBL, pp_c.SPACE_STATS_SPEC)
+        update_stats (pp_c.STATS_FC, community_id, space_stats, pp_c.SPACE_STATS_SPEC)
+
+        # Update tree stats
+        tree_stats = __read_community_stats (community, community_id, pp_c.COMMUNITY_TREE_STATS_TBL, pp_c.TREE_STATS_SPEC)
+        update_stats (pp_c.STATS_FC, community_id, tree_stats, pp_c.TREE_STATS_SPEC)
+
+        # Update derived stats
+        field_names = ['acres', 'small', 'medium', 'large', 'percent_canopy', 'percent_buildings', 'percent_other', 'trees', 'trees_per_acre']
+        with arcpy.da.UpdateCursor(pp_c.STATS_FC, field_names, '%s = %i' % (pp_c.STATS_COMMUNITY_COL, community_id)) as cursor:
+            for acres, small, medium, large, percent_canopy, percent_buildings, percent_other, trees, trees_per_acre in cursor:
+                trees = small + medium + large
+                trees_per_acre = trees/acres   
+                percent_other = 100.0 - percent_canopy - percent_buildings
+                cursor.updateRow([acres, small, medium, large, percent_canopy, percent_buildings, percent_other, trees, trees_per_acre])
+
+
+    
