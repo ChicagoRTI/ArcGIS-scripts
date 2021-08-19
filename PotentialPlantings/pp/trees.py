@@ -64,7 +64,22 @@ def site_trees (community_spec):
                                         "DISABLED", 
                                         "DISABLED", 
                                         pp_c.TREES_TEMPLATE_FC)
+    
+    
+    intermediate_output_gdb =  pp_c.prepare_intermediate_output_gdb (pp_c.USE_IN_MEM)
+    intermediate_trees = pp_c.get_intermediate_name (intermediate_output_gdb, 'trees_int', community_id, pp_c.USE_IN_MEM)
+    intermediate_trees_lu = pp_c.get_intermediate_name (intermediate_output_gdb, 'tlu_int', community_id, pp_c.USE_IN_MEM)
+    intermediate_trees_lu_public = pp_c.get_intermediate_name (intermediate_output_gdb, 'tlpub_int', community_id, pp_c.USE_IN_MEM)
 
+    arcpy.CreateFeatureclass_management(os.path.dirname(intermediate_trees),
+                                        os.path.basename(intermediate_trees),
+                                        "POINT",
+                                        pp_c.TREES_TEMPLATE_FC,
+                                        "DISABLED", 
+                                        "DISABLED", 
+                                        pp_c.TREES_TEMPLATE_FC)
+    arcpy.DeleteField_management(intermediate_trees, ['land_use'])
+    
     community_stats_tbl = pp.stats.prepare_community_stats_tbl (community_name, community_id, pp_c.COMMUNITY_TREE_STATS_TBL, pp_c.TREE_STATS_SPEC)
 
     if WRITE_TO_DEBUG_MESH_FC:
@@ -72,8 +87,8 @@ def site_trees (community_spec):
         
     logger.debug  ("Calculating points")
     query = "Shape_Area > 2.5"
-    with arcpy.da.SearchCursor(input_fc, ['OBJECTID', 'SHAPE@', 'community_id', 'land_use', 'is_public'], query) as cursor:
-        for oid, polygon, community, land_use, is_public in cursor:
+    with arcpy.da.SearchCursor(input_fc, ['OBJECTID', 'SHAPE@', 'community_id'], query) as cursor:
+        for oid, polygon, community in cursor:
             x_min, y_min, x_max, y_max = polygon.extent.XMin, polygon.extent.YMin, polygon.extent.XMax, polygon.extent.YMax 
 
             center = arcpy.Point((x_min+x_max)/2, (y_min+y_max)/2)
@@ -101,12 +116,12 @@ def site_trees (community_spec):
                                 __occupy_footprint (mesh, *fp, row, col, tree_category)
                                 
 
-            with arcpy.da.InsertCursor(output_fc, ['SHAPE@', 'code', 'p_oid', 'community_id', 'land_use', 'is_public']) as cursor:
+            with arcpy.da.InsertCursor(intermediate_trees, ['SHAPE@', 'code', 'p_oid', 'community_id']) as cursor:
                 for row,col in plant_points.keys():
-                    cursor.insertRow([plant_points[(row,col)], mesh[row][col], oid, community, land_use, is_public])
+                    cursor.insertRow([plant_points[(row,col)], mesh[row][col], oid, community])
                     size_stats[mesh[row][col]] = size_stats[mesh[row][col]] + 1
-                    landuse_stats[land_use] = landuse_stats[land_use] + 1
-                    public_private_stats[is_public] = public_private_stats[is_public] + 1
+                    # landuse_stats[land_use] = landuse_stats[land_use] + 1
+                    # public_private_stats[is_public] = public_private_stats[is_public] + 1
 
             if WRITE_TO_DEBUG_MESH_FC:
                 with arcpy.da.InsertCursor(MESH_FC, ['SHAPE@', 'code', 'row', 'col', 'x', 'y', 'dim']) as cursor:
@@ -115,9 +130,37 @@ def site_trees (community_spec):
                             p = __mesh_to_point (r, c, nw_corner)
                             cursor.insertRow([p, mesh[r][c], r, c, p.X, p.Y, mesh_row_dim])
 
+
+    pp_c.log_debug ('Identify land use', community)        
+    arcpy.Identity_analysis(intermediate_trees, pp_c.LAND_USE_2015, intermediate_trees_lu, "ALL", "", "NO_RELATIONSHIPS")
+    pp_c.delete( [intermediate_trees] )
+    arcpy.management.AlterField(intermediate_trees_lu, 'LandUse', 'land_use')
+
+    pp_c.log_debug ('Identify public land', community)        
+    arcpy.Identity_analysis(intermediate_trees_lu, pp_c.PUBLIC_LAND, intermediate_trees_lu_public, "ONLY_FID", "", "NO_RELATIONSHIPS")
+    pp_c.delete( [intermediate_trees_lu] )
+
+    pp_c.log_debug ('Populate the "is_public" field', community)   
+    arcpy.management.CalculateField(intermediate_trees_lu_public, pp_c.SPACES_PUBLIC_PRIVATE_COL, "is_public(!FID_%s!)" % (os.path.basename(pp_c.PUBLIC_LAND)), "PYTHON3", r"""def is_public (fid):
+        if fid == -1:
+            return 0
+        else:
+            return 1""", "SHORT")
+        
+    pp_c.log_debug ('Collecting tree statistics', community)  
+    with arcpy.da.SearchCursor(intermediate_trees_lu_public, ['land_use', 'is_public']) as cursor:    
+        for land_use, is_public in cursor:
+            landuse_stats[land_use] = landuse_stats[land_use] + 1
+            public_private_stats[is_public] = public_private_stats[is_public] + 1
+        
+
+    pp_c.log_debug ("Writing points to '%s'" % output_fc, community)            
+    arcpy.management.Append(intermediate_trees_lu_public, output_fc, "NO_TEST")
+    pp_c.delete ([intermediate_trees_lu_public])
+
     pp.stats.update_stats (community_stats_tbl, community_id, size_stats + landuse_stats[1:] + public_private_stats, pp_c.TREE_STATS_SPEC)
-#    pp.stats.update_derived_stats(community_id)
-                       
+
+            
     return 
 
 
@@ -275,9 +318,6 @@ def prepare_fc ():
         arcpy.management.AssignDomainToField(pp_c.TREES_FC, pp_c.TREES_PUBLIC_PRIVATE_COL, pp_c.PUBLIC_PRIVATE_DOMAIN_NAME)
         arcpy.management.AssignDomainToField(pp_c.TREES_FC, pp_c.TREES_COMMUNITY_COL, pp_c.COMMUNITY_DOMAIN_NAME)    
         arcpy.management.AssignDomainToField(pp_c.TREES_FC, pp_c.TREES_SIZE_COL, pp_c.TREE_SIZE_DOMAIN_NAME) 
-        arcpy.management.AddIndex(pp_c.TREES_FC, pp_c.TREES_COMMUNITY_COL, "IDX_Comm", "NON_UNIQUE", "NON_ASCENDING")
-        arcpy.management.AddIndex(pp_c.TREES_FC, pp_c.TREES_LANDUSE_COL, "IDX_LandUse", "NON_UNIQUE", "NON_ASCENDING")
-        arcpy.management.AddIndex(pp_c.TREES_FC, pp_c.TREES_PUBLIC_PRIVATE_COL, "IDX_PublicPrivate", "NON_UNIQUE", "NON_ASCENDING")
         
         
 
@@ -297,9 +337,15 @@ def combine_trees_fcs (community_specs):
         where = "%s IN (%s)" % (pp_c.TREES_COMMUNITY_COL, ','.join(community_ids))
         old_records = arcpy.SelectLayerByAttribute_management(out_fc, 'NEW_SELECTION', where)[0]
         arcpy.management.DeleteFeatures(old_records)
+
+    if len(communities) > 10:
+        pp_c.remove_indexes (out_fc, pp_c.TREES_INDEX_SPEC)        
         
     pp_c.log_info ('Write to combined trees feature class')
     arcpy.management.Append(community_fcs, out_fc)
+    
+    if len(communities) > 10:
+        pp_c.add_indexes (out_fc, pp_c.TREES_INDEX_SPEC) 
    
     return
 

@@ -114,7 +114,7 @@ LANDUSE_DOMAIN = {'Ag': 1,
                   'Other': 10}
 
 PUBLIC_PRIVATE_DOMAIN_NAME = 'PublicPrivate'
-PUBLIC_PRIVATE_DOMAIN = {'Public': 0, 'Private': 1}
+PUBLIC_PRIVATE_DOMAIN = {'Private': 0, 'Public': 1}
 
 COMMUNITY_DOMAIN_NAME = 'Community Name'
 
@@ -126,6 +126,12 @@ DOMAIN_ASSIGNMENTS = {SPACES_GDB:  [COMMUNITY_DOMAIN_NAME],
                                              PUBLIC_PRIVATE_DOMAIN_NAME,
                                              COMMUNITY_DOMAIN_NAME, 
                                              TREE_SIZE_DOMAIN_NAME]}
+
+TREES_INDEX_SPEC  = [(TREES_LANDUSE_COL, 'IDX_LandUse'),
+                     (TREES_PUBLIC_PRIVATE_COL, 'IDX_PublicPrivate'),
+                     (TREES_COMMUNITY_COL, 'IDX_Community'),
+                     (TREES_SIZE_COL, 'IDX_TreeSize')]
+SPACES_INDEX_SPEC  = [(SPACES_COMMUNITY_COL, 'IDX_Community')]
 
 
 IN_MEM_ID = 0
@@ -168,6 +174,45 @@ def create_domains (workspace, domain_names):
                 for attr_vals in cursor:
                     arcpy.management.AddCodedValueToDomain(workspace, COMMUNITY_DOMAIN_NAME, attr_vals[0], attr_vals[1])
     return 
+
+
+def prepare_intermediate_output_gdb (use_in_mem):
+    if use_in_mem:
+        arcpy.Delete_management('in_memory')
+        intermediate_output_gdb = None
+    else:
+        intermediate_output_gdb = os.path.join(TEMP_DIR,  'intermediate_%i.gdb' %(OS_PID))
+        if not arcpy.Exists(intermediate_output_gdb):
+            arcpy.CreateFileGDB_management(os.path.dirname(intermediate_output_gdb), os.path.basename(intermediate_output_gdb))
+    return intermediate_output_gdb
+
+
+def get_intermediate_name (intermediate_output_gdb, name, idx, use_in_mem):
+    global IN_MEM_ID
+    
+    if use_in_mem:
+        IN_MEM_ID = IN_MEM_ID + 1
+        fn = os.path.join('in_memory', 'm%i' % (idx) + '_' + name[0:3] + '_' + str(IN_MEM_ID))
+    else:
+        fn = os.path.join(intermediate_output_gdb, name + '_%i' % idx )
+    delete ([fn])
+    return fn
+
+
+def add_indexes (table, index_spec):
+     existing_indexes = [i.name for i in arcpy.ListIndexes(table)]
+     for field, index in index_spec:
+        if index not in existing_indexes:
+            log_debug ('Adding index %s to field %s in table %s' % (index, field, table))
+            arcpy.management.AddIndex(table, [field], index, "NON_UNIQUE", "NON_ASCENDING")
+
+
+def remove_indexes (table, index_spec):
+    existing_indexes = [i.name for i in arcpy.ListIndexes(table)]
+    for field, index in index_spec:
+        if index in existing_indexes:
+            log_debug ('Removing index %s from field %s in table %s' % (index, field, table))
+            arcpy.RemoveIndex_management(table, [index])
 
 
 def is_in_memory (fc):
