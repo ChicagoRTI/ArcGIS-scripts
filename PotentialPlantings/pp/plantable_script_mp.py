@@ -75,7 +75,7 @@ def create_spaces_and_trees (community_spec):
             pp.trees.site_trees (community_spec)       
 
 
-        pp_c.log_info('Complete:', community_spec[0])
+        pp_c.log_info('Complete', community_spec[0])
         return
     
     except Exception as ex:

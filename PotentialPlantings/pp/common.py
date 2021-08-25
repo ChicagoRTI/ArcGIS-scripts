@@ -181,10 +181,14 @@ def prepare_intermediate_output_gdb (use_in_mem):
         arcpy.Delete_management('in_memory')
         intermediate_output_gdb = None
     else:
-        intermediate_output_gdb = os.path.join(TEMP_DIR,  'intermediate_%i.gdb' %(OS_PID))
+        intermediate_output_gdb = get_intermediate_output_gdb_name ()
         if not arcpy.Exists(intermediate_output_gdb):
             arcpy.CreateFileGDB_management(os.path.dirname(intermediate_output_gdb), os.path.basename(intermediate_output_gdb))
     return intermediate_output_gdb
+
+
+def get_intermediate_output_gdb_name ():
+    return os.path.join(TEMP_DIR,  'intermediate_%i.gdb' %(OS_PID))
 
 
 def get_intermediate_name (intermediate_output_gdb, name, idx, use_in_mem):

@@ -41,6 +41,10 @@ TREE_FOOTPRINT_DIM = {SMALL:  1,
                       MEDIUM: 3,
                       BIG:    5}
 
+TREE_RADIUS = {SMALL: .5 * TREE_FOOTPRINT_DIM[SMALL] * MIN_DIAMETER,
+               MEDIUM: .5 * TREE_FOOTPRINT_DIM[MEDIUM] * MIN_DIAMETER,
+               BIG: .5 * TREE_FOOTPRINT_DIM[BIG] * MIN_DIAMETER,}
+
 
 def site_trees (community_spec):
 
@@ -85,7 +89,7 @@ def site_trees (community_spec):
     if WRITE_TO_DEBUG_MESH_FC:
         arcpy.management.DeleteFeatures(MESH_FC)
         
-    logger.debug  ("Calculating points")
+    pp_c.log_info  ("Calculating points", community_name)
     query = "Shape_Area > 2.5"
     with arcpy.da.SearchCursor(input_fc, ['OBJECTID', 'SHAPE@', 'community_id'], query) as cursor:
         for oid, polygon, community in cursor:
@@ -119,9 +123,6 @@ def site_trees (community_spec):
             with arcpy.da.InsertCursor(intermediate_trees, ['SHAPE@', 'code', 'p_oid', 'community_id']) as cursor:
                 for row,col in plant_points.keys():
                     cursor.insertRow([plant_points[(row,col)], mesh[row][col], oid, community])
-                    size_stats[mesh[row][col]] = size_stats[mesh[row][col]] + 1
-                    # landuse_stats[land_use] = landuse_stats[land_use] + 1
-                    # public_private_stats[is_public] = public_private_stats[is_public] + 1
 
             if WRITE_TO_DEBUG_MESH_FC:
                 with arcpy.da.InsertCursor(MESH_FC, ['SHAPE@', 'code', 'row', 'col', 'x', 'y', 'dim']) as cursor:
@@ -131,30 +132,50 @@ def site_trees (community_spec):
                             cursor.insertRow([p, mesh[r][c], r, c, p.X, p.Y, mesh_row_dim])
 
 
-    pp_c.log_debug ('Identify land use', community)        
+    pp_c.log_debug ('Identify land use', community_name)        
     arcpy.Identity_analysis(intermediate_trees, pp_c.LAND_USE_2015, intermediate_trees_lu, "ALL", "", "NO_RELATIONSHIPS")
     pp_c.delete( [intermediate_trees] )
     arcpy.management.AlterField(intermediate_trees_lu, 'LandUse', 'land_use')
 
-    pp_c.log_debug ('Identify public land', community)        
+    pp_c.log_debug ('Identify public land', community_name)        
     arcpy.Identity_analysis(intermediate_trees_lu, pp_c.PUBLIC_LAND, intermediate_trees_lu_public, "ONLY_FID", "", "NO_RELATIONSHIPS")
     pp_c.delete( [intermediate_trees_lu] )
 
-    pp_c.log_debug ('Populate the "is_public" field', community)   
+    pp_c.log_debug ('Populate the "is_public" field', community_name)   
     arcpy.management.CalculateField(intermediate_trees_lu_public, pp_c.SPACES_PUBLIC_PRIVATE_COL, "is_public(!FID_%s!)" % (os.path.basename(pp_c.PUBLIC_LAND)), "PYTHON3", r"""def is_public (fid):
         if fid == -1:
             return 0
         else:
             return 1""", "SHORT")
+
+    # __downsize (intermediate_output_gdb, intermediate_trees_lu_public, community_name, community_id)
+
+    pp_c.log_debug ('Find overlaps', community_name)   
+    overlap_oids = __find_overlaps (intermediate_output_gdb, intermediate_trees_lu_public, community_name, community_id)  
         
-    pp_c.log_debug ('Collecting tree statistics', community)  
-    with arcpy.da.SearchCursor(intermediate_trees_lu_public, ['land_use', 'is_public']) as cursor:    
-        for land_use, is_public in cursor:
+    pp_c.log_debug ('Collecting tree statistics and downsizing overlaps', community_name)  
+    big_to_medium, medium_to_small, small = 0,0,0
+    with arcpy.da.UpdateCursor(intermediate_trees_lu_public, ['objectid', 'code', 'land_use', 'is_public', ]) as cursor:    
+        for oid, tree_size, land_use, is_public in cursor:
+            if oid in overlap_oids:
+                if tree_size == BIG:
+                    tree_size = MEDIUM
+                    big_to_medium = big_to_medium + 1
+                    cursor.updateRow([oid, tree_size, land_use, is_public])
+                elif tree_size == MEDIUM:
+                    tree_size = SMALL
+                    medium_to_small = medium_to_small + 1
+                    cursor.updateRow([oid, tree_size, land_use, is_public]) 
+                else:
+                    tree_size = SMALL
+                    small = small + 1
+            size_stats[tree_size] = size_stats[tree_size] + 1
             landuse_stats[land_use] = landuse_stats[land_use] + 1
             public_private_stats[is_public] = public_private_stats[is_public] + 1
+    pp_c.log_debug ("Updated feature class with new sizes. L->M=%i, M->S=%i, S=%i" % (big_to_medium, medium_to_small, small), community_name)  
         
 
-    pp_c.log_debug ("Writing points to '%s'" % output_fc, community)            
+    pp_c.log_debug ("Writing points to '%s'" % output_fc, community_name)            
     arcpy.management.Append(intermediate_trees_lu_public, output_fc, "NO_TEST")
     pp_c.delete ([intermediate_trees_lu_public])
 
@@ -307,6 +328,86 @@ def __get_mesh_algorithm (mesh_row_dim, mesh_col_dim, polygon):
             return MESH_ALGORITHM_SMALL
         else:
             return MESH_ALGORITHM_BIG
+
+
+
+
+
+# def __downsize (intermediate_output_gdb, intermediate_trees_lu_public, community_name, community_id):
+#     pp_c.log_info ('Downsizing', community_name)  
+# #    arcpy.management.AddIndex(intermediate_trees_lu_public, ['code'], 'CodeIDX', "NON_UNIQUE", "NON_ASCENDING")
+
+#     for size in [BIG, MEDIUM]:
+#         __downsize_updates (intermediate_output_gdb, intermediate_trees_lu_public, size, community_name, community_id)
+        
+#     return
+
+# def __downsize_updates (intermediate_output_gdb, in_layer, code, community_name, community_id):
+# #    too_close_table = pp_c.get_intermediate_name (pp_c.get_intermediate_output_gdb_name(), 'tmtc_int', community_id, True)    
+#     too_close_table = pp_c.get_intermediate_name (None, 'tmtc_int', community_id, True)    
+#     too_close_distance = TREE_RADIUS[code] - .1
+
+#     pp_c.log_debug ("Select trees. Size='%i'" % code, community_name)  
+#     selected_trees = arcpy.SelectLayerByAttribute_management(in_layer, 'NEW_SELECTION', "code = %i" % (code))[0]
+        
+#     pp_c.log_debug ("Generate near table", community_name)  
+#     arcpy.analysis.GenerateNearTable(selected_trees, in_layer, too_close_table, too_close_distance, "NO_LOCATION", "NO_ANGLE", "CLOSEST", 0, "PLANAR")
+
+#     oid_to_newsize = dict()
+#     large_to_medium = 0
+#     medium_to_small = 0
+#     too_small = 0
+    
+#     pp_c.log_debug ("Finding trees to downsize", community_name)  
+#     with arcpy.da.SearchCursor(too_close_table, ['IN_FID', 'NEAR_DIST']) as cursor:
+#         for oid, distance in cursor:
+#             if distance < TREE_RADIUS[SMALL]:
+#                 too_small = too_small + 1
+#             elif distance < TREE_RADIUS[MEDIUM]:
+#                 medium_to_small = medium_to_small + 1
+#                 oid_to_newsize[oid] = SMALL
+#             else:
+#                 oid_to_newsize[oid] = MEDIUM
+#                 large_to_medium = large_to_medium + 1
+#     pp_c.delete( [too_close_table] )
+    
+#     pp_c.log_debug ("Updating feature class with new sizes. L->M=%i, M->S=%i, S=%i" % (large_to_medium, medium_to_small, too_small), community_name)  
+#     with arcpy.da.UpdateCursor(selected_trees, ['objectid', 'code']) as cursor:    
+#         for oid, tree_size in cursor:
+#             if oid in oid_to_newsize.keys():
+#                 cursor.updateRow([oid, oid_to_newsize[oid]])
+#     pp_c.delete( [selected_trees] )
+#     return
+
+
+
+def __find_overlaps (intermediate_output_gdb, in_fc, community_name, community_id):
+    trees_buffered = pp_c.get_intermediate_name (intermediate_output_gdb, 'tbuffered_int', community_id, pp_c.USE_IN_MEM)
+    trees_overlapped = pp_c.get_intermediate_name (intermediate_output_gdb, 'tolap_int', community_id, pp_c.USE_IN_MEM)
+    
+    pp_c.log_debug ('Populate the "radius" field', community_name)   
+    arcpy.management.CalculateField(in_fc, 'radius', "get_radius(!code!)", "PYTHON3", r"""def get_radius (code):
+        if code == 0:
+            return %1.2f
+        elif code == 1:
+            return %1.2f
+        else:
+            return %1.2f""" % (.5*TREE_FOOTPRINT_DIM[SMALL]*MIN_DIAMETER, .5*TREE_FOOTPRINT_DIM[MEDIUM]*MIN_DIAMETER, .5*TREE_FOOTPRINT_DIM[BIG]*MIN_DIAMETER), "FLOAT")
+
+    pp_c.log_debug ('Buffer the points', community_name)   
+    arcpy.analysis.Buffer(in_fc, trees_buffered, "radius", "FULL", "ROUND", "NONE", None, "PLANAR")
+
+    pp_c.log_debug ('Find overlapping trees', community_name)
+    arcpy.analysis.Intersect(trees_buffered, trees_overlapped, "ONLY_FID", None, "INPUT")    
+    pp_c.delete( [trees_buffered] )
+    overlap_oids = []    
+    with arcpy.da.SearchCursor(trees_overlapped, ['FID_%s' % (os.path.basename(trees_buffered))]) as cursor:
+        for oid in cursor:
+            overlap_oids.append(oid[0])
+    pp_c.delete( [trees_overlapped] )            
+    return overlap_oids
+
+
 
 
 def prepare_fc ():
