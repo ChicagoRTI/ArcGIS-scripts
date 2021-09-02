@@ -7,6 +7,7 @@ import pp.common as pp_c
 
 import pp.spaces
 import pp.trees
+import pp.canopies
 import pp.stats
 
 import pp.logger
@@ -24,7 +25,7 @@ def run():
     os.makedirs(pp_c.COMMUNITIES_DIR, exist_ok=True)
 
     # Prepare the output databases
-    for workspace in [pp_c.SPACES_GDB, pp_c.TREES_AND_STATS_GDB]:
+    for workspace in [pp_c.SPACES_GDB, pp_c.TREES_AND_STATS_GDB, pp_c.CANOPIES_GDB]:
         if not arcpy.Exists(workspace):
             raise Exception ("%s geodatabase does not exist" % (workspace))
         if pp_c.IS_SCRATCH_OUTPUT_DATA: 
@@ -35,24 +36,28 @@ def run():
     # Prepare the output feature classes            
     pp.spaces.prepare_fc ()
     pp.trees.prepare_fc ()
+    pp.canopies.prepare_fc ()
     pp.stats.prepare_fc ()
                   
     community_specs = __get_communities(pp_c.SUBSET_START_POINT, pp_c.SUBSET_COUNT, pp_c.SUBSET_LIST)
     
     if pp_c.PROCESSORS > 1:
         p = multiprocessing.Pool(pp_c.PROCESSORS)
-        p.map(create_spaces_and_trees, community_specs, 1)
+        p.map(create_spaces_and_trees_and_canopies, community_specs, 1)
         p.close()        
     else:
         # Process each community past the alphabetical starting point
         for community_spec in community_specs:                       
-            create_spaces_and_trees (community_spec)
+            create_spaces_and_trees_and_canopies (community_spec)
                            
     if pp_c.IS_COMBINE_SPACES:              
         pp.spaces.combine_spaces_fcs (community_specs)
                 
     if pp_c.IS_COMBINE_TREES:              
         pp.trees.combine_trees_fcs (community_specs)   
+                
+    if pp_c.IS_COMBINE_CANOPIES:              
+        pp.canopies.combine_canopies_fcs (community_specs)   
         
     pp.stats.combine_stats (community_specs)        
                     
@@ -60,7 +65,7 @@ def run():
     return
 
 
-def create_spaces_and_trees (community_spec):
+def create_spaces_and_trees_and_canopies (community_spec):
     try:       
         arcpy.env.outputZFlag = "Disabled"
         arcpy.env.outputMFlag = "Disabled"
@@ -73,7 +78,9 @@ def create_spaces_and_trees (community_spec):
                            
         if pp_c.IS_CREATE_TREES:          
             pp.trees.site_trees (community_spec)       
-
+                           
+        if pp_c.IS_CREATE_CANOPIES:          
+            pp.canopies.create_canopies (community_spec)       
 
         pp_c.log_info('Complete', community_spec[0])
         return

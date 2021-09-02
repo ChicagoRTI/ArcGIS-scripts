@@ -16,34 +16,23 @@ logger = pp.logger.get('pp_log')
 
 WRITE_TO_DEBUG_MESH_FC = False
 
-
 DB_DIR = r'C:\Users\dmorrison\AppData\Roaming\ESRI\Desktop10.6\ArcCatalog\ROW Habitat (SDE).SDE'
 MESH_FC = os.path.join(DB_DIR, 'PP_TEST_mesh')
 
-MIN_DIAMETER = 10 * 0.3048
-NEG_BUFFER = - (10 * 0.3048)
-
-SMALL = 0
-MEDIUM = 1
-BIG = 2
-VACANT = 100
-OUTSIDE_POLYGON = 101
-CANOPY = 102
 
 MESH_ALGORITHM_SMALL = 0
 MESH_ALGORITHM_BIG = 1
 
-TREE_CATEGORIES = [BIG, MEDIUM, SMALL]
-
-# This is the footprint dimension of each tree catetory. It is a multiple of 
-# the MIN_DIAMETER and must be an odd number
-TREE_FOOTPRINT_DIM = {SMALL:  1,
-                      MEDIUM: 3,
-                      BIG:    5}
-
-TREE_RADIUS = {SMALL: .5 * TREE_FOOTPRINT_DIM[SMALL] * MIN_DIAMETER,
-               MEDIUM: .5 * TREE_FOOTPRINT_DIM[MEDIUM] * MIN_DIAMETER,
-               BIG: .5 * TREE_FOOTPRINT_DIM[BIG] * MIN_DIAMETER,}
+MIN_DIAMETER = pp_c.MIN_DIAMETER
+SMALL = pp_c.SMALL
+MEDIUM = pp_c.MEDIUM
+BIG = pp_c.BIG
+VACANT = pp_c.VACANT
+OUTSIDE_POLYGON = pp_c.OUTSIDE_POLYGON
+CANOPY = pp_c.CANOPY
+TREE_CATEGORIES = pp_c.TREE_CATEGORIES
+TREE_FOOTPRINT_DIM = pp_c.TREE_FOOTPRINT_DIM
+TREE_RADIUS = pp_c.TREE_RADIUS
 
 
 def site_trees (community_spec):
@@ -153,10 +142,14 @@ def site_trees (community_spec):
     pp_c.log_debug ('Find overlaps', community_name)   
     overlap_oids = __find_overlaps (intermediate_output_gdb, intermediate_trees_lu_public, community_name, community_id)  
         
-    pp_c.log_debug ('Collecting tree statistics and downsizing overlaps', community_name)  
+    pp_c.log_debug ('Collecting tree statistics, fixing bad land uses, and downsizing overlaps', community_name)  
     big_to_medium, medium_to_small, small = 0,0,0
     with arcpy.da.UpdateCursor(intermediate_trees_lu_public, ['objectid', 'code', 'land_use', 'is_public', ]) as cursor:    
         for oid, tree_size, land_use, is_public in cursor:
+            if land_use not in pp_c.LANDUSE_DOMAIN.values():
+                # Fix up unrecognized land use 
+                land_use = pp_c.LANDUSE_DOMAIN['other']
+                cursor.updateRow([oid, tree_size, land_use, is_public])
             if oid in overlap_oids:
                 if tree_size == BIG:
                     tree_size = MEDIUM

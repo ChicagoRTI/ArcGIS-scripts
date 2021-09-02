@@ -8,12 +8,12 @@ import pp.logger
 logger = pp.logger.get('pp_log')
 
 
-PROBLEM_COMMUNITIES = ['Joliet', 'CHICAGO TWSHP']
+PROBLEM_COMMUNITIES = ['Joliet', 'Chicago Twshp']
 
 def find_spaces (community_spec):
     try:
         
-        # Process each community past the alphabetical starting point
+        # Process the input community
         community, acres, idx = community_spec
         pp_c.log_info('Finding spaces. %i acres' % (acres), community)
         
@@ -33,14 +33,14 @@ def find_spaces (community_spec):
         
         community_fc = pp_c.get_community_fc_name (community, pp_c.COMMUNITY_SPACES_FC)
         pp_c.delete ([community_fc])
-        community_stats_tbl = pp.stats.prepare_community_stats_tbl (community, idx, pp_c.COMMUNITY_SPACE_STATS_TBL, pp_c.SPACE_STATS_SPEC)
+#        community_stats_tbl = pp.stats.prepare_community_stats_tbl (community, idx, pp_c.COMMUNITY_SPACE_STATS_TBL, pp_c.SPACE_STATS_SPEC)
                    
         pp_c.log_debug ('Getting community boundary', community)
         community_boundary = arcpy.SelectLayerByAttribute_management(pp_c.MUNI_COMMUNITY_AREA, 'NEW_SELECTION', "COMMUNITY = '%s'" % (community))[0]
     
         pp_c.log_debug ('Clipping %s' %(os.path.basename(pp_c.CANOPY_EXPAND_TIF)), community)
         arcpy.management.Clip(pp_c.CANOPY_EXPAND_TIF, '#', canopy_clipped, community_boundary, nodata_value='', clipping_geometry="ClippingGeometry", maintain_clipping_extent="MAINTAIN_EXTENT")
-        percent_canopy = float(arcpy.management.GetRasterProperties(canopy_clipped, 'MEAN')[0])
+#        percent_canopy = float(arcpy.management.GetRasterProperties(canopy_clipped, 'MEAN')[0])
     
         pp_c.log_debug ('Clipping %s' %(os.path.basename(pp_c.PLANTABLE_REGION_TIF)), community)
         arcpy.management.Clip(pp_c.PLANTABLE_REGION_TIF, '#', plantable_region_clipped, community_boundary, clipping_geometry="ClippingGeometry", maintain_clipping_extent="MAINTAIN_EXTENT")
@@ -51,7 +51,7 @@ def find_spaces (community_spec):
                    
         pp_c.log_debug ('Clipping %s' %(os.path.basename(pp_c.BUILDINGS_EXPAND_TIF)), community)
         arcpy.management.Clip(pp_c.BUILDINGS_EXPAND_TIF, '#', buildings_clipped, community_boundary, clipping_geometry="ClippingGeometry", maintain_clipping_extent="MAINTAIN_EXTENT")
-        percent_buildings = float(arcpy.management.GetRasterProperties(buildings_clipped, 'MEAN')[0])
+#        percent_buildings = float(arcpy.management.GetRasterProperties(buildings_clipped, 'MEAN')[0])
     
         pp_c.log_debug ('Removing buildings', community)
         arcpy.gp.RasterCalculator_sa('Con("%s" != 1,"%s")' % (buildings_clipped, minus_trees), minus_trees_buildings)
@@ -82,7 +82,7 @@ def find_spaces (community_spec):
         __save_community_spaces (plantable_muni, community_fc)
         pp_c.delete( [plantable_muni] )        
 
-        pp.stats.update_stats (community_stats_tbl, idx, [percent_canopy*100, percent_buildings*100], pp_c.SPACE_STATS_SPEC)
+#        pp.stats.update_stats (community_stats_tbl, idx, [percent_canopy*100, percent_buildings*100], pp_c.SPACE_STATS_SPEC)
             
     except Exception as ex:
       pp_c.log_debug ('Exception: %s' % (str(ex)))
