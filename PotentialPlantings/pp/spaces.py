@@ -26,44 +26,36 @@ def find_spaces (community_spec):
         buildings_clipped = pp_c.get_intermediate_name (intermediate_output_gdb, 'buildings_clipped', idx, use_in_mem)
         minus_trees = pp_c.get_intermediate_name (intermediate_output_gdb, 'minus_trees', idx, use_in_mem)
         minus_trees_buildings = pp_c.get_intermediate_name (intermediate_output_gdb, 'minus_trees_buildings', idx, use_in_mem)
-        minus_trees_buildings_reclass = pp_c.get_intermediate_name (intermediate_output_gdb, 'minus_trees_buildings_reclass', idx, use_in_mem)
         plantable_poly = pp_c.get_intermediate_name (intermediate_output_gdb, 'plantable_poly', idx, use_in_mem)
         plantable_single_poly = pp_c.get_intermediate_name (intermediate_output_gdb, 'plantable_single_poly', idx, use_in_mem)
         plantable_muni = pp_c.get_intermediate_name (intermediate_output_gdb, 'plantable_muni', idx, use_in_mem)
         
         community_fc = pp_c.get_community_fc_name (community, pp_c.COMMUNITY_SPACES_FC)
         pp_c.delete ([community_fc])
-#        community_stats_tbl = pp.stats.prepare_community_stats_tbl (community, idx, pp_c.COMMUNITY_SPACE_STATS_TBL, pp_c.SPACE_STATS_SPEC)
                    
         pp_c.log_debug ('Getting community boundary', community)
         community_boundary = arcpy.SelectLayerByAttribute_management(pp_c.MUNI_COMMUNITY_AREA, 'NEW_SELECTION', "COMMUNITY = '%s'" % (community))[0]
     
         pp_c.log_debug ('Clipping %s' %(os.path.basename(pp_c.CANOPY_EXPAND_TIF)), community)
         arcpy.management.Clip(pp_c.CANOPY_EXPAND_TIF, '#', canopy_clipped, community_boundary, nodata_value='', clipping_geometry="ClippingGeometry", maintain_clipping_extent="MAINTAIN_EXTENT")
-#        percent_canopy = float(arcpy.management.GetRasterProperties(canopy_clipped, 'MEAN')[0])
     
         pp_c.log_debug ('Clipping %s' %(os.path.basename(pp_c.PLANTABLE_REGION_TIF)), community)
         arcpy.management.Clip(pp_c.PLANTABLE_REGION_TIF, '#', plantable_region_clipped, community_boundary, clipping_geometry="ClippingGeometry", maintain_clipping_extent="MAINTAIN_EXTENT")
     
         pp_c.log_debug ('Removing trees', community)
-        arcpy.gp.RasterCalculator_sa('Con("%s" != 1,"%s")' % (canopy_clipped, plantable_region_clipped), minus_trees)
+        arcpy.gp.RasterCalculator_sa('Con(IsNull("%s"), "%s")' % (canopy_clipped, plantable_region_clipped), minus_trees)
         pp_c.delete( [canopy_clipped, plantable_region_clipped] )
                    
         pp_c.log_debug ('Clipping %s' %(os.path.basename(pp_c.BUILDINGS_EXPAND_TIF)), community)
         arcpy.management.Clip(pp_c.BUILDINGS_EXPAND_TIF, '#', buildings_clipped, community_boundary, clipping_geometry="ClippingGeometry", maintain_clipping_extent="MAINTAIN_EXTENT")
-#        percent_buildings = float(arcpy.management.GetRasterProperties(buildings_clipped, 'MEAN')[0])
     
         pp_c.log_debug ('Removing buildings', community)
-        arcpy.gp.RasterCalculator_sa('Con("%s" != 1,"%s")' % (buildings_clipped, minus_trees), minus_trees_buildings)
+        arcpy.gp.RasterCalculator_sa('Con(IsNull("%s"), "%s")' % (buildings_clipped, minus_trees), minus_trees_buildings)
         pp_c.delete( [buildings_clipped, minus_trees, community_boundary] )
-        
-        pp_c.log_debug ('Reclassifying raster', community)
-        minus_trees_buildings_reclass = arcpy.sa.Reclassify(minus_trees_buildings, "Value", "0 NODATA;1 1", "DATA"); 
-        pp_c.delete( [minus_trees_buildings] )
-        
+                
         pp_c.log_debug ('Converting raster to polygon', community)        
-        arcpy.RasterToPolygon_conversion(minus_trees_buildings_reclass, plantable_poly, "SIMPLIFY", "", "SINGLE_OUTER_PART", "")
-        pp_c.delete( [minus_trees_buildings_reclass] )
+        arcpy.RasterToPolygon_conversion(minus_trees_buildings, plantable_poly, "SIMPLIFY", "", "SINGLE_OUTER_PART", "")
+        pp_c.delete( [minus_trees_buildings] )
 
         pp_c.log_debug ('Repair invalid features', community)        
         arcpy.management.RepairGeometry(plantable_poly, "DELETE_NULL", "ESRI")
@@ -82,7 +74,6 @@ def find_spaces (community_spec):
         __save_community_spaces (plantable_muni, community_fc)
         pp_c.delete( [plantable_muni] )        
 
-#        pp.stats.update_stats (community_stats_tbl, idx, [percent_canopy*100, percent_buildings*100], pp_c.SPACE_STATS_SPEC)
             
     except Exception as ex:
       pp_c.log_debug ('Exception: %s' % (str(ex)))
