@@ -148,7 +148,7 @@ def site_trees (community_spec):
         for oid, tree_size, land_use, is_public in cursor:
             if land_use not in pp_c.LANDUSE_DOMAIN.values():
                 # Fix up unrecognized land use 
-                land_use = pp_c.LANDUSE_DOMAIN['other']
+                land_use = pp_c.LANDUSE_DOMAIN['Other']
                 cursor.updateRow([oid, tree_size, land_use, is_public])
             if oid in overlap_oids:
                 if tree_size == BIG:
@@ -303,74 +303,47 @@ def __get_mesh (mesh_row_dim, mesh_col_dim, polygon, nw_corner, input_fc):
     return mesh
 
 
-def __get_mesh_algorithm (mesh_row_dim, mesh_col_dim, polygon):
-    threshold_1 = 100000
-    threshold_2 = 1000000
+# def __get_mesh_algorithm (mesh_row_dim, mesh_col_dim, polygon):
+#     threshold_1 = 100000
+#     threshold_2 = 1000000
     
-    polygon_sq_meters = round(polygon.getArea('PLANAR', 'SQUAREMETERS')) 
-    mesh_sq_meters = mesh_row_dim * mesh_col_dim * MIN_DIAMETER * MIN_DIAMETER
+#     polygon_sq_meters = round(polygon.getArea('PLANAR', 'SQUAREMETERS')) 
+#     mesh_sq_meters = mesh_row_dim * mesh_col_dim * MIN_DIAMETER * MIN_DIAMETER
 
-    if mesh_sq_meters < threshold_1:
+#     if mesh_sq_meters < threshold_1:
+#         return MESH_ALGORITHM_SMALL
+#     elif mesh_sq_meters > threshold_2:
+#         return MESH_ALGORITHM_BIG
+#     else:
+#         percent_polygon = (polygon_sq_meters/mesh_sq_meters) * 100
+#         precent_gap = (mesh_sq_meters - threshold_1)/(threshold_2 - threshold_1) * 100
+#         if percent_polygon > precent_gap:
+#             return MESH_ALGORITHM_SMALL
+#         else:
+#             return MESH_ALGORITHM_BIG
+
+
+
+def __get_mesh_algorithm (mesh_row_dim, mesh_col_dim, polygon):
+    threshold_cells_1 = 10000
+    threshold_cells_2 = 100000
+    
+    mesh_cells = mesh_row_dim * mesh_col_dim
+
+    if mesh_cells < threshold_cells_1:
         return MESH_ALGORITHM_SMALL
-    elif mesh_sq_meters > threshold_2:
+    elif mesh_cells > threshold_cells_2:
+        pp_c.log_debug ('Big Mesh1 %i cells' % (mesh_cells)) 
         return MESH_ALGORITHM_BIG
     else:
-        percent_polygon = (polygon_sq_meters/mesh_sq_meters) * 100
-        precent_gap = (mesh_sq_meters - threshold_1)/(threshold_2 - threshold_1) * 100
+        polygon_cells = round(polygon.getArea('PLANAR', 'SQUAREMETERS')/(MIN_DIAMETER * MIN_DIAMETER)) 
+        percent_polygon = (polygon_cells/mesh_cells) * 100
+        precent_gap = (mesh_cells - threshold_cells_1)/(threshold_cells_2 - threshold_cells_1) * 100
         if percent_polygon > precent_gap:
             return MESH_ALGORITHM_SMALL
         else:
+            pp_c.log_debug ('Big Mesh2 %i cells, %i percent polygon, %i percent gap' % (mesh_cells, int(percent_polygon), int(precent_gap))) 
             return MESH_ALGORITHM_BIG
-
-
-
-
-
-# def __downsize (intermediate_output_gdb, intermediate_trees_lu_public, community_name, community_id):
-#     pp_c.log_info ('Downsizing', community_name)  
-# #    arcpy.management.AddIndex(intermediate_trees_lu_public, ['code'], 'CodeIDX', "NON_UNIQUE", "NON_ASCENDING")
-
-#     for size in [BIG, MEDIUM]:
-#         __downsize_updates (intermediate_output_gdb, intermediate_trees_lu_public, size, community_name, community_id)
-        
-#     return
-
-# def __downsize_updates (intermediate_output_gdb, in_layer, code, community_name, community_id):
-# #    too_close_table = pp_c.get_intermediate_name (pp_c.get_intermediate_output_gdb_name(), 'tmtc_int', community_id, True)    
-#     too_close_table = pp_c.get_intermediate_name (None, 'tmtc_int', community_id, True)    
-#     too_close_distance = TREE_RADIUS[code] - .1
-
-#     pp_c.log_debug ("Select trees. Size='%i'" % code, community_name)  
-#     selected_trees = arcpy.SelectLayerByAttribute_management(in_layer, 'NEW_SELECTION', "code = %i" % (code))[0]
-        
-#     pp_c.log_debug ("Generate near table", community_name)  
-#     arcpy.analysis.GenerateNearTable(selected_trees, in_layer, too_close_table, too_close_distance, "NO_LOCATION", "NO_ANGLE", "CLOSEST", 0, "PLANAR")
-
-#     oid_to_newsize = dict()
-#     large_to_medium = 0
-#     medium_to_small = 0
-#     too_small = 0
-    
-#     pp_c.log_debug ("Finding trees to downsize", community_name)  
-#     with arcpy.da.SearchCursor(too_close_table, ['IN_FID', 'NEAR_DIST']) as cursor:
-#         for oid, distance in cursor:
-#             if distance < TREE_RADIUS[SMALL]:
-#                 too_small = too_small + 1
-#             elif distance < TREE_RADIUS[MEDIUM]:
-#                 medium_to_small = medium_to_small + 1
-#                 oid_to_newsize[oid] = SMALL
-#             else:
-#                 oid_to_newsize[oid] = MEDIUM
-#                 large_to_medium = large_to_medium + 1
-#     pp_c.delete( [too_close_table] )
-    
-#     pp_c.log_debug ("Updating feature class with new sizes. L->M=%i, M->S=%i, S=%i" % (large_to_medium, medium_to_small, too_small), community_name)  
-#     with arcpy.da.UpdateCursor(selected_trees, ['objectid', 'code']) as cursor:    
-#         for oid, tree_size in cursor:
-#             if oid in oid_to_newsize.keys():
-#                 cursor.updateRow([oid, oid_to_newsize[oid]])
-#     pp_c.delete( [selected_trees] )
-#     return
 
 
 
@@ -385,7 +358,7 @@ def __find_overlaps (intermediate_output_gdb, in_fc, community_name, community_i
         elif code == 1:
             return %1.2f
         else:
-            return %1.2f""" % (.5*TREE_FOOTPRINT_DIM[SMALL]*MIN_DIAMETER, .5*TREE_FOOTPRINT_DIM[MEDIUM]*MIN_DIAMETER, .5*TREE_FOOTPRINT_DIM[BIG]*MIN_DIAMETER), "FLOAT")
+            return %1.2f""" % (TREE_RADIUS[SMALL], TREE_RADIUS[MEDIUM], TREE_RADIUS[BIG]), "FLOAT")
 
     pp_c.log_debug ('Buffer the points', community_name)   
     arcpy.analysis.Buffer(in_fc, trees_buffered, "radius", "FULL", "ROUND", "NONE", None, "PLANAR")

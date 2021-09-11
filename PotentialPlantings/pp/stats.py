@@ -104,7 +104,10 @@ def compute_canopy_growth (total_acres, percent_canopy, small, medium, large):
     for size in growth_spec.keys():
         start_acres = projected_growth[0][size]
         target_acres = 0.000247105 *  (growth_spec[size]['sited_trees'] * (3.141592653589793 * (pp_c.TREE_RADIUS[size] **2)))
-        growth_spec[size]['cagr'] = pow(target_acres/start_acres, 1/growth_years) - 1
+        if target_acres > 0:
+            growth_spec[size]['cagr'] = pow(target_acres/start_acres, 1/growth_years) - 1
+        else:
+            growth_spec[size]['cagr'] =0
 
     # Compute annual total acres
     annual_totals = [sum(projected_growth[0].values())]

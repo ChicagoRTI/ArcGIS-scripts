@@ -180,7 +180,8 @@ CANOPIES_INDEX_SPEC  = [(CANOPIES_LANDUSE_COL, 'IDX_LandUse'),
                      (CANOPIES_SIZE_COL, 'IDX_TreeSize')]
 SPACES_INDEX_SPEC  = [(SPACES_COMMUNITY_COL, 'IDX_Community')]
 
-MIN_DIAMETER = 10 * 0.3048
+#MIN_DIAMETER = 10 * 0.3048
+MIN_DIAMETER = 5 * 0.3048
 
 
 
@@ -195,9 +196,12 @@ TREE_CATEGORIES = [BIG, MEDIUM, SMALL]
 
 # This is the footprint dimension of each tree catetory. It is a multiple of 
 # the MIN_DIAMETER and must be an odd number
-TREE_FOOTPRINT_DIM = {SMALL:  1,
-                      MEDIUM: 3,
-                      BIG:    5}
+# TREE_FOOTPRINT_DIM = {SMALL:  1,
+#                       MEDIUM: 3,
+#                       BIG:    5}
+TREE_FOOTPRINT_DIM = {SMALL:  3,
+                      MEDIUM: 5,
+                      BIG:    7}
 
 TREE_RADIUS = {SMALL: .5 * TREE_FOOTPRINT_DIM[SMALL] * MIN_DIAMETER,
                MEDIUM: .5 * TREE_FOOTPRINT_DIM[MEDIUM] * MIN_DIAMETER,
