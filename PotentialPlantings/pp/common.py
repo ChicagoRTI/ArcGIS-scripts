@@ -5,7 +5,7 @@ import configparser
 import pp.logger
 logger = pp.logger.get('pp_log')
 
-cfg_fn = os.path.normpath(__file__ + '/../../local/plantable_script.properties')
+cfg_fn = os.path.normpath(__file__ + '/../local/plantable_script.properties')
 config = configparser.ConfigParser()
 config.read(cfg_fn)
 
@@ -38,10 +38,15 @@ TREES_AND_STATS_GDB = config['output_data']['trees_and_stats_gdb']
 CANOPIES_GDB = config['output_data']['canopies_gdb']
 COMMUNITIES_DIR = config['output_data']['communities_dir']
 TEMP_DIR = config['output_data']['temp_dir']
+PREP_DIR = config['output_data']['prep_dir']
+
 # Community subset
 SUBSET_LIST = config['community_subset']['list']
 SUBSET_START_POINT = config['community_subset']['start_point']
-SUBSET_COUNT = int(config['community_subset']['number'])
+try:
+    SUBSET_COUNT = int(config['community_subset']['number'])
+except:
+    SUBSET_COUNT = None
 
 
 SPACES_FC = os.path.join(SPACES_GDB, 'spaces')

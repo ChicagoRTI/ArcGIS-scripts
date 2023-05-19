@@ -74,7 +74,7 @@ def create_table (input_fc_folder, output_table):
     log ('Gathering file names from ' + input_fc_folder)
     arcpy.env.workspace = input_fc_folder
     
-    # Check if the input is a  folder (implies shape files) and any files need to be renames
+    # Check if the input is a  folder (implies shape files) and any files need to be renamed
     if arcpy.Describe(input_fc_folder).dataType == 'Folder':
         for full_path in glob.glob(os.path.join(input_fc_folder,'*')):
             file_name, extension = os.path.splitext(os.path.basename(full_path))

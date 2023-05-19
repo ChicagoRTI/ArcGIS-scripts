@@ -97,6 +97,9 @@ def __get_communities (start_point, count, list_):
     with arcpy.da.SearchCursor(pp_c.MUNI_COMMUNITY_AREA, ['OBJECTID', 'COMMUNITY', 'SHAPE@']) as cursor:
         for attr_vals in cursor:
             communities.append( (attr_vals[1], int(attr_vals[2].getArea('PLANAR', 'ACRES')), attr_vals[0]) )
+            
+    if count is None:
+        count = len(communities)
 
     community_names = [c[0] for c in communities]
     if len(community_names) != len(set(community_names)):
