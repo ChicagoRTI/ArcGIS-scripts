@@ -1,0 +1,7 @@
+*.pyc
+*.autolock
+log/
+log.txt
+temp/
+local/
+.spyproject
