@@ -28,13 +28,13 @@ INPUTS = [
                 'oid_field': 'objectid',
                 'id_prefix': 'I',
             },
-            {
-                'name': 'External',
-                'location': 'https://gis.mortonarb.org/server/rest/services/Hosted/service_b97f296ee4444209b2904f56df3cab1a/FeatureServer/0',
-                'field_names': ['shape@', 'objectid', 'tree_dbh', 'multistem', 'common_name', 'latin_name', 'date_', 'latin_common', 'created_user', 'notes', 'tree_dbh', 'cultivar', 'is_copied', 'multistem', 'new_existing', 'certainty'],
-                'oid_field': 'objectid',    
-                'id_prefix': 'E',
-            },         
+            # {
+            #     'name': 'External',
+            #     'location': 'https://gis.mortonarb.org/server/rest/services/Hosted/service_b97f296ee4444209b2904f56df3cab1a/FeatureServer/0',
+            #     'field_names': ['shape@', 'objectid', 'tree_dbh', 'multistem', 'common_name', 'latin_name', 'date_', 'latin_common', 'created_user', 'notes', 'tree_dbh', 'cultivar', 'is_copied', 'multistem', 'new_existing', 'certainty'],
+            #     'oid_field': 'objectid',    
+            #     'id_prefix': 'E',
+            # },         
             # {
             #     'name': 'Old_Data',
             #     'location': os.path.join(BASE_DIR, r'data\Old_Data\OldData_DeleteIdentical.shp'),
@@ -60,7 +60,6 @@ def run():
     # Process the input records    
     for input_ in INPUTS:
         output = list()
-        print (f"{dt.datetime.now():%c}: Reading {input_['name']}")
 
         with arcpy.da.SearchCursor(input_['location'], input_['field_names'], __get_where_clause(input_), spatial_reference=SR) as input_cursor:
             for row in input_cursor:
@@ -111,15 +110,14 @@ def run():
                     
                 
     
-        print (f"{dt.datetime.now():%c}: Writing {len(output)} records")
         if len(output) > 0:
+            print (f"{dt.datetime.now():%c}: Writing {len(output)} {input_['name']} records")
             with arcpy.da.InsertCursor(OUTPUT_ITEM_URL, list(output[0]['output_record'].keys())) as output_cursor:
                 for o in output:                              
                     output_cursor.insertRow(list(__truncate_strings (o['output_record']).values()))
                     __write_is_copied (input_, o['input_oid'])
 
     __update_task_monitor ()
-    print (f"{dt.datetime.now():%c}: Finished")
     return
 
 

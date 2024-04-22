@@ -1,6 +1,6 @@
 echo off
 SETLOCAL EnableDelayedExpansion 
 
-SET PYTHON_EXE="C:\\Program Files\\ArcGIS\\Pro\\bin\\Python\\envs\\arcgispro-py3\\python.exe"
+SET PYTHON_EXE="C:\\Users\\dmorrison\\AppData\\Local\\ESRI\\conda\\envs\\arcgispro-py3-clone\\python.exe"
 
-%PYTHON_EXE%  -c "import code.merge_records; code.merge_records.run ()"
+%PYTHON_EXE%  -c "import inv.scheduled_job; inv.scheduled_job.run ()"
