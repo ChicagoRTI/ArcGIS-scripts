@@ -41,7 +41,7 @@ def site_trees (community_spec):
     pp_c.log_info('Siting trees.', community_name)
     
     size_stats = [0,0,0]
-    landuse_stats = [0,0,0,0,0,0,0,0,0,0,0]
+    landuse_stats = [0,0,0,0,0,0,0,0,0,0,0,0,0]
     public_private_stats = [0,0]
     
     input_fc = pp_c.get_community_fc_name (community_spec[0], pp_c.COMMUNITY_SPACES_FC)
@@ -105,7 +105,7 @@ def site_trees (community_spec):
                     for row, col in __get_tier_vacancies (center_row, center_col, tier_idx, mesh, mesh_row_dim, mesh_col_dim):        
                         fp = __get_footprint (row, col, TREE_FOOTPRINT_DIM[tree_category], mesh_row_dim, mesh_col_dim)
                         if __is_footprint_clean (mesh, *fp):  
-                            if is_point_in_polygon (row, col, polygon, nw_corner, mesh, mesh_type,plant_points):
+                            if is_point_in_polygon (row, col, polygon, nw_corner, mesh, mesh_type, plant_points):
                                 __occupy_footprint (mesh, *fp, row, col, tree_category)
                                 
 
@@ -122,7 +122,7 @@ def site_trees (community_spec):
 
 
     pp_c.log_debug ('Identify land use', community_name)        
-    arcpy.Identity_analysis(intermediate_trees, pp_c.LAND_USE_2015, intermediate_trees_lu, "ALL", "", "NO_RELATIONSHIPS")
+    arcpy.Identity_analysis(intermediate_trees, pp_c.LANDUSE_FC, intermediate_trees_lu, "ALL", "", "NO_RELATIONSHIPS")
     pp_c.delete( [intermediate_trees] )
     arcpy.management.AlterField(intermediate_trees_lu, 'LandUse', 'land_use')
 

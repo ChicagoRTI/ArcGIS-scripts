@@ -7,13 +7,14 @@ import pp.logger
 logger = pp.logger.get('pp_log')
 
 
+
 def prepare_fc ():
     if not arcpy.Exists(pp_c.STATS_FC):       
         pp_c.log_debug ("Creating '%s'" % pp_c.STATS_FC)
         
         # Make a copy of the community and land cover csv file - mainly to get it into a feature class
         # that works with JoinField call
-        community_and_landcover_tbl = arcpy.conversion.TableToTable(pp_c.COMMUNITY_LAND_COVER_TBL, arcpy.env.scratchGDB, 'communities_an_landcover')[0]
+        community_and_landcover_tbl = arcpy.conversion.TableToTable(pp_c.COMMUNITY_LAND_COVER_TBL, arcpy.env.scratchGDB, 'communities_and_landcover')[0]
                
         # Make a copy of the community feature class and reproject it
         communities_fc = arcpy.conversion.FeatureClassToFeatureClass(pp_c.MUNI_COMMUNITY_AREA, arcpy.env.scratchGDB, 'communities')[0]
@@ -34,36 +35,6 @@ def prepare_fc ():
             
         pp_c.delete ([communities_fc, community_and_landcover_tbl])
     return
-
-
-# def prepare_fc ():
-#     if not arcpy.Exists(pp_c.STATS_FC):       
-#         pp_c.log_debug ("Creating '%s'" % pp_c.STATS_FC)
-        
-#         # Make a copy of the community and land cover csv file - mainly to get it into a feature class
-#         # that works with JoinField call
-#         community_and_landcover_tbl = arcpy.conversion.TableToTable(in_rows, out_path, out_name, {where_clause}, {field_mapping}, {config_keyword})
-        
-        
-#         # Make a copy of the community feature class and reproject it
-#         communities_fc = arcpy.conversion.FeatureClassToFeatureClass(pp_c.MUNI_COMMUNITY_AREA, arcpy.env.scratchGDB, 'communities')[0]
-#         arcpy.management.Project(communities_fc, pp_c.STATS_FC, arcpy.Describe(pp_c.TREES_TEMPLATE_FC).spatialReference)
-    
-#         # Add the stats fields
-#         for name, type_ in pp_c.COMMUNITY_STATS_SPEC + pp_c.TREE_STATS_SPEC + pp_c.DERIVED_STATS:
-#             arcpy.AddField_management(pp_c.STATS_FC, name, type_)
-#          # Fill in the community_id field  
-#         arcpy.management.CalculateField(pp_c.STATS_FC, pp_c.STATS_COMMUNITY_COL, '!OBJECTID!')
-#         # Fill in the acres field  
-#         arcpy.management.CalculateField(pp_c.STATS_FC, 'acres', "!shape.area@acres!")
-#         # Join in the land cover information for each community
-#         arcpy.management.JoinField(pp_c.STATS_FC, pp_c.STATS_COMMUNITY_NAME_COL, pp_c.COMMUNITY_LAND_COVER_TBL, pp_c.LAND_COVER_COMMUNITY_NAME_COL, [s[0] for s in pp_c.LAND_COVER_STATS])
-#         arcpy.management.CalculateField(pp_c.STATS_FC, 'Canopy', '!Canopy!*100', "PYTHON3", "", "FLOAT")
-#         # Map community id to name
-#         arcpy.management.AssignDomainToField(pp_c.STATS_FC, pp_c.STATS_COMMUNITY_COL, pp_c.COMMUNITY_DOMAIN_NAME)    
-            
-#         pp_c.delete ([communities_fc])
-#     return
 
 
 def prepare_community_stats_tbl (community, community_id, fc_type, stats_spec):
@@ -101,19 +72,24 @@ def combine_stats (community_specs):
     for community, acres, community_id in community_specs:
         pp_c.log_debug ('Updating final stats for %s' % community)
         
-        # Update tree stats
+        # Update tree stats (un;less they are all zeroes, in which case remove the record from the combined table)
         tree_stats = __read_community_stats (community, community_id, pp_c.COMMUNITY_TREE_STATS_TBL, pp_c.TREE_STATS_SPEC)
-        update_stats (pp_c.STATS_FC, community_id, tree_stats, pp_c.TREE_STATS_SPEC)
-
-        # Update derived stats
-        field_names = ['acres', 'small', 'medium', 'large', 'Canopy', 'trees', 'trees_per_acre', 'canopy_y0', 'canopy_y5', 'canopy_y10', 'canopy_y15', 'canopy_y20', 'canopy_y25']
-        with arcpy.da.UpdateCursor(pp_c.STATS_FC, field_names, '%s = %i' % (pp_c.STATS_COMMUNITY_COL, community_id)) as cursor:
-            for acres, small, medium, large, percent_canopy,  trees, trees_per_acre, cy0, cy5, cy10, cy15, cy20, cy25 in cursor:
-                existing_canopy_acres = acres * percent_canopy / 100.0
-                trees = small + medium + large
-                trees_per_acre = trees/acres   
-                canopy_growth = compute_canopy_growth (acres, percent_canopy, small, medium, large)
-                cursor.updateRow([acres, small, medium, large, percent_canopy, trees, trees_per_acre] + [(existing_canopy_acres + canopy_growth[i])/acres*100 for i in range(0,26,5)])
+        if pp_c.SKIP_EMTPY_COMMUNITIES and sum(tree_stats) == 0:
+            with arcpy.da.UpdateCursor(pp_c.STATS_FC, '*', '%s = %i' % (pp_c.STATS_COMMUNITY_COL, community_id)) as cursor:
+                for attr_vals in cursor:
+                    cursor.deleteRow()
+        else:
+            update_stats (pp_c.STATS_FC, community_id, tree_stats, pp_c.TREE_STATS_SPEC)
+    
+            # Update derived stats
+            field_names = ['acres', 'small', 'medium', 'large', 'Canopy', 'trees', 'trees_per_acre', 'canopy_y0', 'canopy_y5', 'canopy_y10', 'canopy_y15', 'canopy_y20', 'canopy_y25']
+            with arcpy.da.UpdateCursor(pp_c.STATS_FC, field_names, '%s = %i' % (pp_c.STATS_COMMUNITY_COL, community_id)) as cursor:
+                for acres, small, medium, large, percent_canopy,  trees, trees_per_acre, cy0, cy5, cy10, cy15, cy20, cy25 in cursor:
+                    existing_canopy_acres = acres * percent_canopy / 100.0
+                    trees = small + medium + large
+                    trees_per_acre = trees/acres   
+                    canopy_growth = compute_canopy_growth (acres, percent_canopy, small, medium, large)
+                    cursor.updateRow([acres, small, medium, large, percent_canopy, trees, trees_per_acre] + [(existing_canopy_acres + canopy_growth[i])/acres*100 for i in range(0,26,5)])
     return
 
 

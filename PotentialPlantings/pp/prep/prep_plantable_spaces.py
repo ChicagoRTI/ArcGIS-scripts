@@ -7,14 +7,12 @@ import pp.logger
 logger = pp.logger.get('pp_log')
 
 
-LANDCOVER = r'C:\Users\dmorrison\crti\data\landcover_2018\landcover_2018_mosaic_v8a.tif'
-
+LANDCOVER = pp_c.LANDCOVER_TIF
 
 TREES_AND_BUILDING_GDB = os.path.join(pp_c.PREP_DIR, 'trees_and_buildings.gdb')
 TREES_AND_BUILDINGS_RST = os.path.join(pp_c.PREP_DIR, 'trees_and_buildings_raster.tif')
 TREES_AND_BUILDINGS_FC = os.path.join(TREES_AND_BUILDING_GDB, 'trees_and_buildings')
 TREES_AND_BUILDINGS_EXPANDED_FC = os.path.join(TREES_AND_BUILDING_GDB, 'trees_and_buildings_expanded')
-
 
 SOIL_AND_TURF_GDB = os.path.join(pp_c.PREP_DIR, 'soil_and_turf.gdb')
 SOIL_AND_TURF_RST = os.path.join(pp_c.PREP_DIR, 'soil_and_turf_raster.tif')

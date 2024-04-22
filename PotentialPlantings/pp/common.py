@@ -21,16 +21,23 @@ IS_SCRATCH_OUTPUT_DATA = bool(int(config['actions']['scratch_combined_output_dat
 PROCESSORS = int(config['runtime']['processors'])
 USE_IN_MEM = bool(int(config['runtime']['is_use_in_mem']))
 # Input Data
-BUILDINGS_EXPAND_TIF = config['input_data']['buildings_tif']
-CANOPY_EXPAND_TIF = config['input_data']['canopy_tif']
-PLANTABLE_REGION_TIF = config['input_data']['plantable_region_tif']
+# BUILDINGS_EXPAND_TIF = config['input_data']['buildings_tif']
+# CANOPY_EXPAND_TIF = config['input_data']['canopy_tif']
+# PLANTABLE_REGION_TIF = config['input_data']['plantable_region_tif']
+
+LANDUSE_STRATIFIED_FC = config['input_data']['landuse_stratified_fc']
+LANDCOVER_TIF = config['input_data']['landcover_tif']
 MUNI_COMMUNITY_AREA =config['input_data']['muni_community_area']
-LAND_USE_2015 = config['input_data']['land_use_2015']
+#LAND_USE_2018 = config['input_data']['land_use_2018']
 PUBLIC_LAND = config['input_data']['public_land']
 SPACES_TEMPLATE_FC = config['input_data']['spaces_template_fc']
 TREES_TEMPLATE_FC = config['input_data']['trees_template_fc']
 CANOPIES_TEMPLATE_FC = config['input_data']['canopies_template_fc']
 COMMUNITY_LAND_COVER_TBL = config['input_data']['community_land_cover_tbl']
+
+# Prepared Data
+LANDUSE_FC = config['prepared_data']['land_use_fc']
+ALL_SPACES_FC = config['prepared_data']['all_spaces_fc']
 
 # Output Data
 SPACES_GDB = config['output_data']['spaces_gdb']
@@ -61,6 +68,7 @@ COMMUNITY_CANOPIES_FC = 'canopies'
 #COMMUNITY_SPACE_STATS_TBL = 'space_stats'
 COMMUNITY_TREE_STATS_TBL = 'tree_stats'
 
+SKIP_EMTPY_COMMUNITIES = True
 
 # STAT_TREES = 'trees'
 # STAT_TREES_PER_ACRE = 'trees_per_acre'
@@ -94,6 +102,22 @@ COMMUNITY_STATS_SPEC = [('community_id', 'SHORT'),
 # SPACE_STATS_SPEC = [('percent_canopy', 'FLOAT'),
 #                     ('percent_buildings', 'FLOAT')]
 
+# TREE_STATS_SPEC = [('small', 'LONG'),
+#                   ('medium', 'LONG'),
+#                   ('large', 'LONG'),
+#                   ('ag', 'LONG'),
+#                   ('commercial', 'LONG'),
+#                   ('industrial', 'LONG'),
+#                   ('institutional', 'LONG'),
+#                   ('openSpace', 'LONG'),
+#                   ('residential', 'LONG'),
+#                   ('transit', 'LONG'),
+#                   ('vacant', 'LONG'),
+#                   ('water', 'LONG'),
+#                   ('other', 'LONG'),
+#                   ('private', 'LONG'),
+#                   ('public', 'LONG')]
+
 TREE_STATS_SPEC = [('small', 'LONG'),
                   ('medium', 'LONG'),
                   ('large', 'LONG'),
@@ -101,16 +125,16 @@ TREE_STATS_SPEC = [('small', 'LONG'),
                   ('commercial', 'LONG'),
                   ('industrial', 'LONG'),
                   ('institutional', 'LONG'),
-                  ('openSpace', 'LONG'),
+                  ('natural_area', 'LONG'),
                   ('residential', 'LONG'),
                   ('transit', 'LONG'),
                   ('vacant', 'LONG'),
-                  ('water', 'LONG'),
+                  ('golf', 'LONG'),
+                  ('park', 'LONG'),
+                  ('utility', 'LONG'),
                   ('other', 'LONG'),
                   ('private', 'LONG'),
                   ('public', 'LONG')]
-
-
 
 DERIVED_STATS =   [('trees', 'LONG'),
                   ('trees_per_acre', 'FLOAT'),
@@ -146,16 +170,21 @@ TREES_SIZE_COL = 'code'
 
 
 LANDUSE_DOMAIN_NAME = 'Land Use'
-LANDUSE_DOMAIN = {'Ag': 1,
-                  'Commercial': 2,
-                  'Industrial': 3,
-                  'Institutional': 4,
-                  'OpenSpace': 5,
-                  'Residential': 6,
-                  'Transit': 7,
-                  'Vacant': 8,
-                  'Water': 9,
-                  'Other': 10}
+LANDUSE_DOMAIN = {	
+    'Agriculture': 1,
+	'Commercial': 2,
+	'Industrial': 3,
+	'Institutional': 4,
+	'Natural area': 5,
+	'Residential': 6,
+	'Transit': 7,
+	'Vacant': 8,
+	'Golf': 9,
+	'Park': 10,
+	'Utility': 11,
+	'Other': 12,
+    }
+
 
 PUBLIC_PRIVATE_DOMAIN_NAME = 'PublicPrivate'
 PUBLIC_PRIVATE_DOMAIN = {'Private': 0, 'Public': 1}
@@ -260,22 +289,22 @@ def prepare_intermediate_output_gdb (use_in_mem):
         arcpy.Delete_management('in_memory')
         intermediate_output_gdb = None
     else:
-        intermediate_output_gdb = get_intermediate_output_gdb_name ()
+        intermediate_output_gdb = os.path.join(TEMP_DIR,  'intermediate_%i.gdb' %(OS_PID))
         if not arcpy.Exists(intermediate_output_gdb):
             arcpy.CreateFileGDB_management(os.path.dirname(intermediate_output_gdb), os.path.basename(intermediate_output_gdb))
     return intermediate_output_gdb
 
 
-def get_intermediate_output_gdb_name ():
-    return os.path.join(TEMP_DIR,  'intermediate_%i.gdb' %(OS_PID))
+# def get_intermediate_output_gdb_name ():
+#     return os.path.join(TEMP_DIR,  'intermediate_%i.gdb' %(OS_PID))
 
 
-def get_intermediate_name (intermediate_output_gdb, name, idx, use_in_mem):
+def get_intermediate_name (intermediate_output_gdb, name, idx, use_in_mem, extension=''):
     global IN_MEM_ID
     
     if use_in_mem:
         IN_MEM_ID = IN_MEM_ID + 1
-        fn = os.path.join('in_memory', 'm%i' % (idx) + '_' + name[0:3] + '_' + str(IN_MEM_ID))
+        fn = os.path.join('in_memory', 'm%i' % (idx) + '_' + name[0:3] + '_' + str(IN_MEM_ID) + extension)
     else:
         fn = os.path.join(intermediate_output_gdb, name + '_%i' % idx )
     delete ([fn])

@@ -10,6 +10,7 @@ logger = pp.logger.get('pp_log')
 
 PROBLEM_COMMUNITIES = ['Joliet', 'Chicago Twshp']
 
+      
 def find_spaces (community_spec):
     try:
         
@@ -21,12 +22,12 @@ def find_spaces (community_spec):
         
         intermediate_output_gdb =  pp_c.prepare_intermediate_output_gdb (use_in_mem)
     
-        canopy_clipped = pp_c.get_intermediate_name (intermediate_output_gdb, 'canopy_clipped', idx, use_in_mem)
-        plantable_region_clipped = pp_c.get_intermediate_name (intermediate_output_gdb, 'plantable_region_clipped', idx, use_in_mem)
-        buildings_clipped = pp_c.get_intermediate_name (intermediate_output_gdb, 'buildings_clipped', idx, use_in_mem)
-        minus_trees = pp_c.get_intermediate_name (intermediate_output_gdb, 'minus_trees', idx, use_in_mem)
-        minus_trees_buildings = pp_c.get_intermediate_name (intermediate_output_gdb, 'minus_trees_buildings', idx, use_in_mem)
-        plantable_poly = pp_c.get_intermediate_name (intermediate_output_gdb, 'plantable_poly', idx, use_in_mem)
+        # canopy_clipped = pp_c.get_intermediate_name (intermediate_output_gdb, 'canopy_clipped', idx, use_in_mem)
+        # plantable_region_clipped = pp_c.get_intermediate_name (intermediate_output_gdb, 'plantable_region_clipped', idx, use_in_mem)
+        # buildings_clipped = pp_c.get_intermediate_name (intermediate_output_gdb, 'buildings_clipped', idx, use_in_mem)
+        # minus_trees = pp_c.get_intermediate_name (intermediate_output_gdb, 'minus_trees', idx, use_in_mem)
+        # minus_trees_buildings = pp_c.get_intermediate_name (intermediate_output_gdb, 'minus_trees_buildings', idx, use_in_mem)
+        # plantable_poly = pp_c.get_intermediate_name (intermediate_output_gdb, 'plantable_poly', idx, use_in_mem)
         plantable_single_poly = pp_c.get_intermediate_name (intermediate_output_gdb, 'plantable_single_poly', idx, use_in_mem)
         plantable_muni = pp_c.get_intermediate_name (intermediate_output_gdb, 'plantable_muni', idx, use_in_mem)
         
@@ -36,34 +37,9 @@ def find_spaces (community_spec):
         pp_c.log_debug ('Getting community boundary', community)
         community_boundary = arcpy.SelectLayerByAttribute_management(pp_c.MUNI_COMMUNITY_AREA, 'NEW_SELECTION', "COMMUNITY = '%s'" % (community))[0]
     
-        pp_c.log_debug ('Clipping %s' %(os.path.basename(pp_c.CANOPY_EXPAND_TIF)), community)
-        arcpy.management.Clip(pp_c.CANOPY_EXPAND_TIF, '#', canopy_clipped, community_boundary, nodata_value='', clipping_geometry="ClippingGeometry", maintain_clipping_extent="MAINTAIN_EXTENT")
+        pp_c.log_debug ('Clipping %s' %(os.path.basename(pp_c.ALL_SPACES_FC)), community)
+        arcpy.analysis.PairwiseClip(pp_c.ALL_SPACES_FC, community_boundary, plantable_single_poly, None)
     
-        pp_c.log_debug ('Clipping %s' %(os.path.basename(pp_c.PLANTABLE_REGION_TIF)), community)
-        arcpy.management.Clip(pp_c.PLANTABLE_REGION_TIF, '#', plantable_region_clipped, community_boundary, clipping_geometry="ClippingGeometry", maintain_clipping_extent="MAINTAIN_EXTENT")
-    
-        pp_c.log_debug ('Removing trees', community)
-        arcpy.gp.RasterCalculator_sa('Con(IsNull("%s"), "%s")' % (canopy_clipped, plantable_region_clipped), minus_trees)
-        pp_c.delete( [canopy_clipped, plantable_region_clipped] )
-                   
-        pp_c.log_debug ('Clipping %s' %(os.path.basename(pp_c.BUILDINGS_EXPAND_TIF)), community)
-        arcpy.management.Clip(pp_c.BUILDINGS_EXPAND_TIF, '#', buildings_clipped, community_boundary, clipping_geometry="ClippingGeometry", maintain_clipping_extent="MAINTAIN_EXTENT")
-    
-        pp_c.log_debug ('Removing buildings', community)
-        arcpy.gp.RasterCalculator_sa('Con(IsNull("%s"), "%s")' % (buildings_clipped, minus_trees), minus_trees_buildings)
-        pp_c.delete( [buildings_clipped, minus_trees, community_boundary] )
-                
-        pp_c.log_debug ('Converting raster to polygon', community)        
-        arcpy.RasterToPolygon_conversion(minus_trees_buildings, plantable_poly, "SIMPLIFY", "", "SINGLE_OUTER_PART", "")
-        pp_c.delete( [minus_trees_buildings] )
-
-        pp_c.log_debug ('Repair invalid features', community)        
-        arcpy.management.RepairGeometry(plantable_poly, "DELETE_NULL", "ESRI")
-    
-        pp_c.log_debug ('Converting multipart polygons to singlepart', community)        
-        arcpy.MultipartToSinglepart_management(plantable_poly, plantable_single_poly)            
-        pp_c.delete( [plantable_poly] )
-                
         pp_c.log_debug ('Spatial join', community)        
         arcpy.SpatialJoin_analysis(plantable_single_poly, pp_c.MUNI_COMMUNITY_AREA, plantable_muni, "JOIN_ONE_TO_ONE", "KEEP_ALL", "", "INTERSECT", "", "")
         pp_c.delete( [plantable_single_poly] )
@@ -80,7 +56,7 @@ def find_spaces (community_spec):
       raise ex
         
     return community_fc
-      
+
 
 def __trim_excess_fields (fc, keep_fields):
     all_fields = set([f.name.lower() for f in arcpy.ListFields(fc)])
