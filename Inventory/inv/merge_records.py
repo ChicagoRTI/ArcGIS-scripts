@@ -29,7 +29,7 @@ INPUTS = [
                 'id_prefix': 'I',
             },
             # {
-            #     'name': 'External',
+            #     'name': 'External - OBSOLETE',
             #     'location': 'https://gis.mortonarb.org/server/rest/services/Hosted/service_b97f296ee4444209b2904f56df3cab1a/FeatureServer/0',
             #     'field_names': ['shape@', 'objectid', 'tree_dbh', 'multistem', 'common_name', 'latin_name', 'date_', 'latin_common', 'created_user', 'notes', 'tree_dbh', 'cultivar', 'is_copied', 'multistem', 'new_existing', 'certainty'],
             #     'oid_field': 'objectid',    
@@ -64,7 +64,7 @@ def run():
         with arcpy.da.SearchCursor(input_['location'], input_['field_names'], __get_where_clause(input_), spatial_reference=SR) as input_cursor:
             for row in input_cursor:
                 input_record = dict(zip(input_['field_names'], row))   
-                if input_['name'] == "Internal" or input_['name'] == "External":
+                if input_['name'] == "Internal":
                     photos = __get_photos (input_record, input_['location'])
                     output.append( {'input_oid': input_record['objectid'], 'output_record': { 
                         'shape@':           input_record['shape@'],
@@ -74,15 +74,16 @@ def run():
                         'dbh':              input_record['tree_dbh'],
                         'date_observed':    input_record['date_'],
                         'notes':            input_record['notes'] if input_record['notes'] is not None and len(input_record['notes']) > 0 else None,
-                        'submitter_name':   input_record['created_user'] if input_record['created_user'] is not None and len(input_record['created_user']) > 0 else None,
+                        'submitter_name':   input_record['created_user'] if input_record['created_user'] is not None and len(input_record['created_user']) > 0 else "CRTI",
                         'photo_1':          photos[0] if len(photos)==1 else None,                   
                         'photo_2':          photos[1] if len(photos)==2 else None,
                         "tree_id":          f"{input_['id_prefix']}_{input_record['objectid']:08}",             
-                        'multi_stem':       input_record['multistem'] if 'multistem' in input_['field_names'] else None,
+                        'multi_stem':       input_record['multistem'].capitalize() if ('multistem' in input_['field_names'] and input_record['multistem'] is not None) else None,
                         'new_or_existing':  input_record['new_existing'] if 'new_existing' in input_['field_names'] else None,
                         'certainty':        input_record['certainty'] if 'certainty' in input_['field_names'] else None,
                         'longitude':        input_record['shape@'].centroid.X,
                         'latitude':         input_record['shape@'].centroid.Y,
+                        'is_reviewed':      IGNORE_IS_COPIED,
                         }} )
 
 
@@ -104,6 +105,7 @@ def run():
                         'certainty':        None,
                         'longitude':        input_record['shape@'].centroid.X,
                         'latitude':         input_record['shape@'].centroid.Y,
+                        'is_reviewed':       True,
                         }} )
                 else:
                     raise Exception ("{dt.datetime.now():%c}: Unrecognized data name")
@@ -130,7 +132,7 @@ def __update_task_monitor ():
     
 
 def __write_is_copied (input_, input_oid_value):
-    if input_['name'] == "Internal" or input_['name'] == "External":
+    if input_['name'] == "Internal":
         with arcpy.da.UpdateCursor(input_['location'], [input_['oid_field'], 'is_copied']) as cursor:
             for oid, is_copied in cursor:
                 if oid == input_oid_value:
@@ -140,7 +142,7 @@ def __write_is_copied (input_, input_oid_value):
 
 
 def __get_where_clause (input_spec):
-    if IGNORE_IS_COPIED or (input_spec['name'] != "Internal" and input_spec['name'] != "External"):
+    if IGNORE_IS_COPIED or input_spec['name'] != "Internal":
         return None
     else:        
         return 'is_copied IS NULL or is_copied <> 1' 
