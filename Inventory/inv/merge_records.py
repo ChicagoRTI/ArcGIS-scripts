@@ -42,7 +42,14 @@ INPUTS = [
             #     'oid_field': 'FID',  
             #     'id_prefix': 'O',
             # },         
-        ]
+            # {
+            #     'name': 'Old_Data_2',
+            #     'location':  'https://gis.mortonarb.org/server/rest/services/Hosted/survey123_06e7000db25046e89596e25ffde74ef8/FeatureServer/0',
+            #     'field_names': ['shape@', 'objectid', '_date', 'notes', 'tree_species', 'field_9', 'tree_dbh', 'cultivar', 'overall_condition', 'created_user'],
+            #     'oid_field': 'FID',  
+            #     'id_prefix': 'P',
+            # },         
+       ]
 
 OUTPUT_ITEM_URL = 'https://services6.arcgis.com/WNXWcrlG6DXHeQ5W/arcgis/rest/services/Trees/FeatureServer/0' # AGOL
 STORIES_ITEM_URL = 'https://services6.arcgis.com/WNXWcrlG6DXHeQ5W/arcgis/rest/services/Inventory_Stories/FeatureServer/0'
@@ -68,9 +75,10 @@ def run():
                     output.append(__convert_internal_survey (input_, row, scientific_to_common_name, common_to_scientific_name, IGNORE_IS_COPIED))
                 elif input_['name'] == "Old_Data":
                     output.append(__convert_old_data_survey (input_, row))
+                elif input_['name'] == "Old_Data_2":
+                    output.append(__convert_old_data_2_survey (input_, row, scientific_to_common_name, common_to_scientific_name))
                 else:
                     raise Exception ("{dt.datetime.now():%c}: Unrecognized data name")
-                    
         if len(output) > 0:
             print (f"{dt.datetime.now():%c}: Writing {len(output)} {input_['name']} records")
             with arcpy.da.InsertCursor(OUTPUT_ITEM_URL, list(output[0]['output_record'].keys())) as output_cursor:
@@ -182,6 +190,37 @@ def __convert_old_data_survey (input_, row):
                 'is_reviewed':       True,
                 }}
 
+def __convert_old_data_2_survey (input_, row, scientific_to_common_name, common_to_scientific_name):
+    input_record = dict(zip(input_['field_names'], row))   
+    photos = __get_photos (input_record, input_['location'])
+    if input_record['tree_species'] is not None:
+        scientific_name = input_record['tree_species'] 
+        common_name = scientific_to_common_name[scientific_name]
+    else:
+        common_name = input_record['field_9']
+        scientific_name = common_to_scientific_name[common_name]
+    
+    return {
+            'input_oid': input_record['objectid'], 
+            'output_record': { 
+                'shape@':           input_record['shape@'],
+                'common_name':      common_name,
+                'scientific_name':  scientific_name,
+                'cultivar':         input_record['cultivar'] if input_record['cultivar'] is not None and len(input_record['cultivar']) > 0 else None,
+                'dbh':              input_record['tree_dbh'],
+                'date_observed':    input_record['_date'],
+                'notes':            input_record['notes'],
+                'submitter_name':   input_record['created_user'] if input_record['created_user'] is not None and len(input_record['created_user']) > 0 else "CRTI",
+                'photo_1':          photos[0] if len(photos)==1 else None,                   
+                'photo_2':          photos[1] if len(photos)==2 else None,
+                "tree_id":          f"{input_['id_prefix']}_{input_record['objectid']:08}",             
+                'multi_stem':       None,
+                'new_or_existing':  None,
+                'certainty':        None,
+                'longitude':        input_record['shape@'].centroid.X,
+                'latitude':         input_record['shape@'].centroid.Y,
+                'is_reviewed':       True,
+                }}    
 
 def __create_internal_change_story (changes,tree_id):   
     with arcpy.da.InsertCursor(STORIES_ITEM_URL, ['title', 'story', 'submitter', 'tree_id', 'is_reviewed']) as output_cursor:
