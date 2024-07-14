@@ -22,9 +22,10 @@ IGNORE_IS_COPIED = False   # True if doing a complete refresh
 
 INPUTS = [ 
             {
+                # Survey currently used by CRTI workers
                 'name': 'Internal',
                 'location': 'https://gis.mortonarb.org/server/rest/services/Hosted/service_d8b3fda9400f4053aa5c90c400d6c07d/FeatureServer/0',
-                'field_names': ['shape@', 'objectid', 'tree_dbh', 'multistem', 'common_name', 'latin_name', 'date_', 'latin_common', 'created_user', 'notes', 'tree_dbh', 'cultivar', 'is_copied', 'last_edited_date'],
+                'field_names': ['shape@', 'objectid', 'tree_dbh', 'multistem', 'new_established', 'common_name', 'latin_name', 'date_', 'latin_common', 'last_edited_user', 'notes', 'tree_dbh', 'cultivar', 'is_copied', 'last_edited_date', 'year_1_dbh', 'year_1_notes', 'year_2_dbh', 'year_2_notes', 'year_3_dbh', 'year_3_notes'],
                 'oid_field': 'objectid',
                 'id_prefix': 'I',
             },
@@ -43,7 +44,7 @@ INPUTS = [
             #     'id_prefix': 'O',
             # },         
             # {
-            #     'name': 'Old_Data_2',
+            #     'name': 'Old_Data_2',  OBSOLETE
             #     'location':  'https://gis.mortonarb.org/server/rest/services/Hosted/survey123_06e7000db25046e89596e25ffde74ef8/FeatureServer/0',
             #     'field_names': ['shape@', 'objectid', '_date', 'notes', 'tree_species', 'field_9', 'tree_dbh', 'cultivar', 'overall_condition', 'created_user'],
             #     'oid_field': 'FID',  
@@ -55,6 +56,8 @@ OUTPUT_ITEM_URL = 'https://services6.arcgis.com/WNXWcrlG6DXHeQ5W/arcgis/rest/ser
 STORIES_ITEM_URL = 'https://services6.arcgis.com/WNXWcrlG6DXHeQ5W/arcgis/rest/services/Inventory_Stories/FeatureServer/0'
 
 OUTPUT_STRING_MAX_LENS = {f.name: f.length for f in arcpy.ListFields(OUTPUT_ITEM_URL) if f.type=='String'}
+
+UNKNOWN_SPECIES = 'Unknown (Unknown)'
 
 def run():
     # Map common names to scientific name and vice versa
@@ -75,14 +78,14 @@ def run():
                     output.append(__convert_internal_survey (input_, row, scientific_to_common_name, common_to_scientific_name, IGNORE_IS_COPIED))
                 elif input_['name'] == "Old_Data":
                     output.append(__convert_old_data_survey (input_, row))
-                elif input_['name'] == "Old_Data_2":
-                    output.append(__convert_old_data_2_survey (input_, row, scientific_to_common_name, common_to_scientific_name))
+                # elif input_['name'] == "Old_Data_2":
+                #     output.append(__convert_old_data_2_survey (input_, row, scientific_to_common_name, common_to_scientific_name))
                 else:
                     raise Exception ("{dt.datetime.now():%c}: Unrecognized data name")
         if len(output) > 0:
             print (f"{dt.datetime.now():%c}: Writing {len(output)} {input_['name']} records")
             with arcpy.da.InsertCursor(OUTPUT_ITEM_URL, list(output[0]['output_record'].keys())) as output_cursor:
-                for o in output:                              
+                for o in output:   
                     output_cursor.insertRow(list(__truncate_strings (o['output_record']).values()))
                     __write_is_copied (input_, o['input_oid'])
 
@@ -117,20 +120,23 @@ def run():
             for row in update_cursor:  
                 changes = list()
                 merged_record = dict(zip(change_sync_fields + ['tree_id', 'int_srvy_last_edited_date', 'int_srvy_oid'], row)) 
-                if merged_record['int_srvy_last_edited_date'] < internal_survey_records[merged_record['int_srvy_oid']]['int_srvy_last_edited_date']:
-                    print (f"Edited internal oid: {merged_record['int_srvy_oid']}") 
-                    for f in change_sync_fields:
-                        before = merged_record[f] 
-                        after = internal_survey_records[merged_record['int_srvy_oid']][f]
-                        if after is None:
-                            merged_record[f] = before
-                        else:
-                            if before != after:
-                                print (f"Field: {f} Before: {before} After: {after}")
-                                changes.append( (f, before, after) )
-                            merged_record[f] = after
-                    merged_record['int_srvy_last_edited_date'] = internal_survey_records[merged_record['int_srvy_oid']]['int_srvy_last_edited_date']
-                    update_cursor.updateRow(list(merged_record.values()))
+                if merged_record['int_srvy_oid'] in internal_survey_records.keys():
+                    if merged_record['int_srvy_last_edited_date'] < internal_survey_records[merged_record['int_srvy_oid']]['int_srvy_last_edited_date']:
+                        print (f"Edited internal oid: {merged_record['int_srvy_oid']}") 
+                        for f in change_sync_fields:
+                            before = merged_record[f] 
+                            after = internal_survey_records[merged_record['int_srvy_oid']][f]
+                            if after is None:
+                                merged_record[f] = before
+                            else:
+                                if before != after:
+                                    print (f"Field: {f} Before: {before} After: {after}")
+                                    changes.append( (f, before, after) )
+                                merged_record[f] = after
+                        merged_record['int_srvy_last_edited_date'] = internal_survey_records[merged_record['int_srvy_oid']]['int_srvy_last_edited_date']
+                        update_cursor.updateRow(list(merged_record.values()))
+                else:
+                    print (f"Internal survey record {merged_record['int_srvy_oid']} no longer exists") 
 
                 if len(changes) > 0:
                     __create_internal_change_story (changes, merged_record['tree_id'])
@@ -149,15 +155,17 @@ def __convert_internal_survey (input_, row, scientific_to_common_name, common_to
                 'common_name':      __get_common_name (input_record, scientific_to_common_name),
                 'scientific_name':  __get_scientific_name (input_record, common_to_scientific_name),
                 'cultivar':         input_record['cultivar'] if input_record['cultivar'] is not None and len(input_record['cultivar']) > 0 else None,
-                'dbh':              input_record['tree_dbh'],
+                # 'dbh':              input_record['tree_dbh'],
+                'dbh':              __get_dbh (input_record, ['year_3_dbh', 'year_2_dbh', 'year_1_dbh', 'tree_dbh']),
                 'date_observed':    input_record['date_'],
-                'notes':            input_record['notes'] if input_record['notes'] is not None and len(input_record['notes']) > 0 else None,
-                'submitter_name':   input_record['created_user'] if input_record['created_user'] is not None and len(input_record['created_user']) > 0 else "CRTI",
+                # 'notes':            input_record['notes'] if input_record['notes'] is not None and len(input_record['notes']) > 0 else None,
+                'notes':            __get_notes (input_record, ['year_3_notes', 'year_2_notes', 'year_1_notes', 'notes']),
+                'submitter_name':   input_record['last_edited_user'] if input_record['last_edited_user'] is not None and len(input_record['last_edited_user']) > 0 and input_record['last_edited_user'] != 'DMorrison@mortonarb.org' else "CRTI",
                 'photo_1':          photos[0] if len(photos)==1 else None,                   
                 'photo_2':          photos[1] if len(photos)==2 else None,
                 "tree_id":          f"{input_['id_prefix']}_{input_record['objectid']:08}",             
                 'multi_stem':       input_record['multistem'].capitalize() if ('multistem' in input_['field_names'] and input_record['multistem'] is not None) else None,
-                'new_or_existing':  input_record['new_existing'] if 'new_existing' in input_['field_names'] else None,
+                'new_or_existing':  input_record['new_established'].replace("Established", "Existing") if ('new_established' in input_['field_names'] and input_record['new_established'] is not None) else None,
                 'certainty':        input_record['certainty'] if 'certainty' in input_['field_names'] else None,
                 'longitude':        input_record['shape@'].centroid.X,
                 'latitude':         input_record['shape@'].centroid.Y,
@@ -190,37 +198,37 @@ def __convert_old_data_survey (input_, row):
                 'is_reviewed':       True,
                 }}
 
-def __convert_old_data_2_survey (input_, row, scientific_to_common_name, common_to_scientific_name):
-    input_record = dict(zip(input_['field_names'], row))   
-    photos = __get_photos (input_record, input_['location'])
-    if input_record['tree_species'] is not None:
-        scientific_name = input_record['tree_species'] 
-        common_name = scientific_to_common_name[scientific_name]
-    else:
-        common_name = input_record['field_9']
-        scientific_name = common_to_scientific_name[common_name]
+# def __convert_old_data_2_survey (input_, row, scientific_to_common_name, common_to_scientific_name):
+#     input_record = dict(zip(input_['field_names'], row))   
+#     photos = __get_photos (input_record, input_['location'])
+#     if input_record['tree_species'] is not None:
+#         scientific_name = input_record['tree_species'] 
+#         common_name = scientific_to_common_name[scientific_name]
+#     else:
+#         common_name = input_record['field_9']
+#         scientific_name = common_to_scientific_name[common_name]
     
-    return {
-            'input_oid': input_record['objectid'], 
-            'output_record': { 
-                'shape@':           input_record['shape@'],
-                'common_name':      common_name,
-                'scientific_name':  scientific_name,
-                'cultivar':         input_record['cultivar'] if input_record['cultivar'] is not None and len(input_record['cultivar']) > 0 else None,
-                'dbh':              input_record['tree_dbh'],
-                'date_observed':    input_record['_date'],
-                'notes':            input_record['notes'],
-                'submitter_name':   input_record['created_user'] if input_record['created_user'] is not None and len(input_record['created_user']) > 0 else "CRTI",
-                'photo_1':          photos[0] if len(photos)==1 else None,                   
-                'photo_2':          photos[1] if len(photos)==2 else None,
-                "tree_id":          f"{input_['id_prefix']}_{input_record['objectid']:08}",             
-                'multi_stem':       None,
-                'new_or_existing':  None,
-                'certainty':        None,
-                'longitude':        input_record['shape@'].centroid.X,
-                'latitude':         input_record['shape@'].centroid.Y,
-                'is_reviewed':       True,
-                }}    
+#     return {
+#             'input_oid': input_record['objectid'], 
+#             'output_record': { 
+#                 'shape@':           input_record['shape@'],
+#                 'common_name':      common_name,
+#                 'scientific_name':  scientific_name,
+#                 'cultivar':         input_record['cultivar'] if input_record['cultivar'] is not None and len(input_record['cultivar']) > 0 else None,
+#                 'dbh':              input_record['tree_dbh'],
+#                 'date_observed':    input_record['_date'],
+#                 'notes':            input_record['notes'],
+#                 'submitter_name':   input_record['created_user'] if input_record['created_user'] is not None and len(input_record['created_user']) > 0 else "CRTI",
+#                 'photo_1':          photos[0] if len(photos)==1 else None,                   
+#                 'photo_2':          photos[1] if len(photos)==2 else None,
+#                 "tree_id":          f"{input_['id_prefix']}_{input_record['objectid']:08}",             
+#                 'multi_stem':       None,
+#                 'new_or_existing':  None,
+#                 'certainty':        None,
+#                 'longitude':        input_record['shape@'].centroid.X,
+#                 'latitude':         input_record['shape@'].centroid.Y,
+#                 'is_reviewed':       True,
+#                 }}    
 
 def __create_internal_change_story (changes,tree_id):   
     with arcpy.da.InsertCursor(STORIES_ITEM_URL, ['title', 'story', 'submitter', 'tree_id', 'is_reviewed']) as output_cursor:
@@ -270,7 +278,7 @@ def __get_common_name (input_record, scientific_to_common_name):
         try:
             return scientific_to_common_name[input_record['latin_name']]
         except:
-            pass
+            return UNKNOWN_SPECIES
     return None
     
 
@@ -281,7 +289,7 @@ def __get_scientific_name (input_record, common_to_scientific_name):
         try:
             return common_to_scientific_name[input_record['common_name']]
         except:
-            pass
+            return UNKNOWN_SPECIES
     return None    
     
 
@@ -299,6 +307,20 @@ def __get_photos (input_record, url):
             pass
     return photos
 
+def __get_dbh (input_record, fields):
+    for f in fields:
+        if input_record[f] is not None:
+            return input_record[f]
+    return None
+        
+def __get_notes (input_record, fields):
+    for f in fields:
+        if input_record[f] is not None and len(input_record[f]) > 0:
+            return input_record[f]
+    return None
+    
+    
+    
 
 if __name__ == '__main__':
     run()
