@@ -14,7 +14,7 @@ DATA_DIR = os.path.join(BASE_DIR, 'data')
 SPECIES_LIST_CLEAN = 'https://services6.arcgis.com/WNXWcrlG6DXHeQ5W/arcgis/rest/services/Species_List/FeatureServer/0'
 TASK_MONITOR = 'https://services6.arcgis.com/WNXWcrlG6DXHeQ5W/arcgis/rest/services/Task_Monitor/FeatureServer/0'
 
-SR = srs = arcpy.SpatialReference(4326)  # WGS 1984
+SR = arcpy.SpatialReference(4326)  # WGS 1984
 
 MAX_PHOTOS = 2
 
@@ -111,8 +111,8 @@ def run():
                                 'multi_stem',
                                 'new_or_existing',
                                 'certainty',
-                                'latitude',
-                                'longitude',
+                                # 'latitude',
+                                # 'longitude',
                                 ]
         
         # Check each merged record so see if the associated internal survey record has been updated
@@ -155,10 +155,8 @@ def __convert_internal_survey (input_, row, scientific_to_common_name, common_to
                 'common_name':      __get_common_name (input_record, scientific_to_common_name),
                 'scientific_name':  __get_scientific_name (input_record, common_to_scientific_name),
                 'cultivar':         input_record['cultivar'] if input_record['cultivar'] is not None and len(input_record['cultivar']) > 0 else None,
-                # 'dbh':              input_record['tree_dbh'],
                 'dbh':              __get_dbh (input_record, ['year_3_dbh', 'year_2_dbh', 'year_1_dbh', 'tree_dbh']),
                 'date_observed':    input_record['date_'],
-                # 'notes':            input_record['notes'] if input_record['notes'] is not None and len(input_record['notes']) > 0 else None,
                 'notes':            __get_notes (input_record, ['year_3_notes', 'year_2_notes', 'year_1_notes', 'notes']),
                 'submitter_name':   input_record['last_edited_user'] if input_record['last_edited_user'] is not None and len(input_record['last_edited_user']) > 0 and input_record['last_edited_user'] != 'DMorrison@mortonarb.org' else "CRTI",
                 'photo_1':          photos[0] if len(photos)==1 else None,                   
@@ -233,12 +231,13 @@ def __convert_old_data_survey (input_, row):
 def __create_internal_change_story (changes,tree_id):   
     with arcpy.da.InsertCursor(STORIES_ITEM_URL, ['title', 'story', 'submitter', 'tree_id', 'is_reviewed']) as output_cursor:
         html = '<table style="margin: 0px auto;"><tr><th>Field</th><th>Old Value</th><th>New Value</th></tr>'
-        for change in changes:
-            html = html + f'<tr><td>{change[0]}</td><td>{change[1]}</td><td>{change[2]}</td></tr>'
+        for change in [c for c in changes if c[0] != 'shape@']:
+            field_alias = [(f.name, f.aliasName)[1] for f in arcpy.Describe(OUTPUT_ITEM_URL).fields if f.name==change[0]][0]
+            html = html + f'<tr><td>{field_alias}</td><td>{change[1]}</td><td>{change[2]}</td></tr>'
         html = html +'</table>'                            
         output_cursor.insertRow(['Inspection/Update', html, 'CRTI', tree_id, True])
     return
-    
+
 
 def __update_task_monitor ():
     with arcpy.da.UpdateCursor(TASK_MONITOR, ['last_run']) as cursor:

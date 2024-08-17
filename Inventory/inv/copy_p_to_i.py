@@ -68,61 +68,46 @@ def run():
                     print (rc['addAttachmentResult'])
     return
     
-    
-    # for old_data_feature in old_data_features:
-    #     oid = old_data_feature.attributes['objectid']
-    #     atts = old_data_fl.attachments.get_list(oid=oid)
-    #     if len(atts) > 0:
-        
-    #         for att in atts:
-    #             print ("Retrieving attachment {att['id']} for oid {oid}")
-    #             rc = old_data_fl.attachments.download(oid=oid, attachment_id=att['id'])
-            
-    #         return
-    
-    
-    
-    # old_data = dict()
-    # with arcpy.da.SearchCursor(OLD_DATA_URL, OLD_FIELDS) as search_cursor:
-    #     for row in search_cursor:
-    #         old_data[row[0]] = dict(zip(OLD_FIELDS, row))
-    
-    # new_data = list()
-    # for old_data_oid in old_data.keys():
-    #     oid = new_data.append(["common" if old_data[old_data_oid]['tree_species'] is None else 'latin',
-    #                      old_data[old_data_oid]['tree_species'],
-    #                      old_data[old_data_oid]['field_9'],
-    #                      old_data[old_data_oid]['cultivar'],
-    #                      old_data[old_data_oid]['tree_dbh'],
-    #                      old_data[old_data_oid]['_date'],
-    #                      old_data[old_data_oid]['notes'],
-    #                      old_data[old_data_oid]['percent_branch_dieback_or_missi'],
-    #                      old_data[old_data_oid]['overall_condition'],
-    #                      True,
-    #                      'P'
-    #                      ])
-    #     old_data[old_data_oid]['new_data_oid'] = oid
-        
-    
-    # with arcpy.da.InsertCursor(INTERNAL_SURVEY_URL, INTERNAL_FIELDS) as insert_cursor:
-    #     for i in insert_data:
-    #         insert_cursor.insertRow (i)
-    #         return
 
-        
-        
-        
+#### CODE TO FIX DOMAIN MISMATCH
+# def run(x):
+#     if survey_level == 0:
+#         return x
+#     if x.startswith('Good'):
+#         return 'Good: <10% dieback, missing crown, visible structural damage, and injury from diseases and pests'
+#     elif x.startswith('Excellent'):
+#         return 'Excellent: no missing crown, dieback, visible damage, or disease and pest presence'
+#     elif x.startswith('Fair'):
+#         return 'Fair: 10%–25%  dieback, missing crown, visible structural damage, and injury from diseases and pests'
+#     elif x.startswith('Poor'):
+#         return 'Poor: 25%-50%  dieback, missing crown, visible structural damage, and injury from diseases and pests'
+#     elif x.startswith('Critical'):
+#         return 'Critical: 50%-75%  dieback, missing crown, visible structural damage, and injury from diseases and pests'
+#     elif x.startswith('Dying/Dead'):
+#         return 'Dying/Dead: >75%  dieback, missing crown, visible structural damage, and injury from diseases and pests'
+#     else:
+#         return x
 
-            
-            
-            
-            # rec_type = tree_id[0]
-            # if rec_type == 'I' and int_srvy_last_edited_date is None:
-            #     rec_oid = int(tree_id[2:])
-            #     print (f"oid: {rec_oid}  date: {oid_to_last_edited[rec_oid]}")
-            #     cursor.updateRow([tree_id, oid_to_last_edited[rec_oid], rec_oid])
-    # inv.approve_records.run()
-    # inv.merge_records.run()
+# def run(x,y):
+#     if y == 0:
+#         return x
+#     if 'excellent' in x:
+#         return '<1% (excellent)'
+#     elif 'good' in x:
+#         return '1-10% (good)'
+#     elif 'fair' in x:
+#         return '11-25% (fair)'
+#     elif 'poor' in x:
+#         return '26-50% (poor)'
+#     elif 'critical' in x:
+#         return '51-75% (critical)'
+#     elif 'dying' in x:
+#         return '76-99% (dying)'
+#     elif 'dead' in x:
+#         return '100% (dead)'
+#     else:
+#         return x
+    
 
     return
 
