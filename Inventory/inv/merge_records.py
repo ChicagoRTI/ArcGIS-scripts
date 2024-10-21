@@ -57,7 +57,7 @@ STORIES_ITEM_URL = 'https://services6.arcgis.com/WNXWcrlG6DXHeQ5W/arcgis/rest/se
 
 OUTPUT_STRING_MAX_LENS = {f.name: f.length for f in arcpy.ListFields(OUTPUT_ITEM_URL) if f.type=='String'}
 
-UNKNOWN_SPECIES = 'Unknown (Unknown)'
+UNKNOWN_SPECIES = 'Unknown'
 
 def run():
     # Map common names to scientific name and vice versa
@@ -228,14 +228,16 @@ def __convert_old_data_survey (input_, row):
 #                 'is_reviewed':       True,
 #                 }}    
 
-def __create_internal_change_story (changes,tree_id):   
-    with arcpy.da.InsertCursor(STORIES_ITEM_URL, ['title', 'story', 'submitter', 'tree_id', 'is_reviewed']) as output_cursor:
-        html = '<table style="margin: 0px auto;"><tr><th>Field</th><th>Old Value</th><th>New Value</th></tr>'
-        for change in [c for c in changes if c[0] != 'shape@']:
-            field_alias = [(f.name, f.aliasName)[1] for f in arcpy.Describe(OUTPUT_ITEM_URL).fields if f.name==change[0]][0]
-            html = html + f'<tr><td>{field_alias}</td><td>{change[1]}</td><td>{change[2]}</td></tr>'
-        html = html +'</table>'                            
-        output_cursor.insertRow(['Inspection/Update', html, 'CRTI', tree_id, True])
+def __create_internal_change_story (changes,tree_id):  
+    changes = [c for c in changes if c[0] != 'shape@']
+    if len(changes) > 0:
+        with arcpy.da.InsertCursor(STORIES_ITEM_URL, ['title', 'story', 'submitter', 'tree_id', 'is_reviewed']) as output_cursor:
+            html = '<table style="margin: 0px auto;"><tr><th>Field</th><th>Old Value</th><th>New Value</th></tr>'
+            for change in changes:
+                field_alias = [(f.name, f.aliasName)[1] for f in arcpy.Describe(OUTPUT_ITEM_URL).fields if f.name==change[0]][0]
+                html = html + f'<tr><td>{field_alias}</td><td>{change[1]}</td><td>{change[2]}</td></tr>'
+            html = html +'</table>'                            
+            output_cursor.insertRow(['Inspection/Update', html, 'CRTI', tree_id, True])
     return
 
 
@@ -278,7 +280,7 @@ def __get_common_name (input_record, scientific_to_common_name):
             return scientific_to_common_name[input_record['latin_name']]
         except:
             return UNKNOWN_SPECIES
-    return None
+    return UNKNOWN_SPECIES
     
 
 def __get_scientific_name (input_record, common_to_scientific_name):
@@ -289,7 +291,7 @@ def __get_scientific_name (input_record, common_to_scientific_name):
             return common_to_scientific_name[input_record['common_name']]
         except:
             return UNKNOWN_SPECIES
-    return None    
+    return UNKNOWN_SPECIES    
     
 
 def __get_photos (input_record, url):

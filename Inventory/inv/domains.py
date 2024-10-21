@@ -2,7 +2,8 @@ import getpass
 import arcpy
 from arcgis.gis import GIS
 
-# Rebuild the host feature layer species domains. This should be run whenever the species list changes
+# Rebuild the host feature layer species domains. This should be run whenever the species list changes. The 
+# change first needs to be edited into the "Species List" AGOL table, then this script should be run
 
 SPECIES_LIST_CLEAN = 'https://services6.arcgis.com/WNXWcrlG6DXHeQ5W/arcgis/rest/services/Species_List/FeatureServer/0'
 TREES_ITEM_ID = '8cbd16a6807247b081f9836352bafadf'
